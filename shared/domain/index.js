@@ -23,3 +23,6 @@ export * from './relationships/entity-links.js';
 // Migrations
 export * from './migrations/habit.migration.js';
 
+// Scheduling Engine
+export * from './scheduling/index.js';
+
