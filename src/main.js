@@ -175,6 +175,7 @@ function setupGeneralUI() {
   const viewAcademicBtn = document.getElementById('view-academic-btn');
   const viewFinanceBtn = document.getElementById('view-finance-btn');
   const viewWellbeingBtn = document.getElementById('view-wellbeing-btn');
+  const viewAIBtn = document.getElementById('view-ai-btn');
   const viewForestBtn = document.getElementById('sidebar-nav-forest');
   const viewStudypoolBtn = document.getElementById('sidebar-nav-studypool');
   
@@ -184,6 +185,7 @@ function setupGeneralUI() {
   const academicWorkspaceView = document.getElementById('academic-workspace-view');
   const financeWorkspaceView = document.getElementById('finance-workspace-view');
   const wellbeingWorkspaceView = document.getElementById('wellbeing-workspace-view');
+  const aiWorkspaceView = document.getElementById('ai-workspace-view');
   const forestView = document.getElementById('forest-garden-view');
   const studypoolView = document.getElementById('studypool-view');
 
@@ -194,10 +196,11 @@ function setupGeneralUI() {
     if (academicWorkspaceView) academicWorkspaceView.classList.add('hidden');
     if (financeWorkspaceView) financeWorkspaceView.classList.add('hidden');
     if (wellbeingWorkspaceView) wellbeingWorkspaceView.classList.add('hidden');
+    if (aiWorkspaceView) aiWorkspaceView.classList.add('hidden');
     if (forestView) forestView.classList.add('hidden');
     if (studypoolView) studypoolView.classList.add('hidden');
 
-    [viewWeeklyBtn, viewCalendarBtn, viewPlanBtn, viewAcademicBtn, viewFinanceBtn, viewWellbeingBtn, viewForestBtn, viewStudypoolBtn].forEach(btn => {
+    [viewWeeklyBtn, viewCalendarBtn, viewPlanBtn, viewAcademicBtn, viewFinanceBtn, viewWellbeingBtn, viewAIBtn, viewForestBtn, viewStudypoolBtn].forEach(btn => {
       if (btn) btn.classList.remove('active');
     });
 
@@ -225,6 +228,10 @@ function setupGeneralUI() {
       if (wellbeingWorkspaceView) wellbeingWorkspaceView.classList.remove('hidden');
       if (viewWellbeingBtn) viewWellbeingBtn.classList.add('active');
       import('./modules/wellbeing/wellbeing.ui.js').then(m => m.initWellbeingWorkspace());
+    } else if (viewId === 'ai') {
+      if (aiWorkspaceView) aiWorkspaceView.classList.remove('hidden');
+      if (viewAIBtn) viewAIBtn.classList.add('active');
+      import('./modules/ai/ai.ui.js').then(m => m.initAIWorkspace());
     } else if (viewId === 'forest') {
       if (forestView) forestView.classList.remove('hidden');
       if (viewForestBtn) viewForestBtn.classList.add('active');
@@ -256,6 +263,9 @@ function setupGeneralUI() {
   }
   if (viewWellbeingBtn) {
     viewWellbeingBtn.addEventListener('click', () => switchMainView('wellbeing'));
+  }
+  if (viewAIBtn) {
+    viewAIBtn.addEventListener('click', () => switchMainView('ai'));
   }
   if (viewForestBtn) {
     viewForestBtn.addEventListener('click', () => switchMainView('forest'));

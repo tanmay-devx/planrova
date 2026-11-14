@@ -144,13 +144,74 @@ export const server = http.createServer(async (req, res) => {
   const clientIP = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
 
   // 1. Health Check
-  if (req.method === 'GET' && req.url === '/api/health') {
+  if (req.method === 'GET' && (req.url === '/api/health' || req.url === '/api/ai/chat/health')) {
     return sendJSON(res, 200, {
       status: 'ok',
-      service: 'Planrova OCR Proxy',
+      service: 'Planrova OCR & AI Proxy',
       keyConfigured: Boolean(GROQ_KEY && GROQ_KEY !== 'your_groq_api_key_here'),
       timestamp: Date.now()
     });
+  }
+
+  // 1.1 AI Assistance Chat Endpoint
+  if (req.method === 'POST' && req.url === '/api/ai/chat') {
+    const rateLimit = checkRateLimit(clientIP);
+    const rateLimitHeaders = {
+      'X-RateLimit-Limit': String(rateLimit.limit),
+      'X-RateLimit-Remaining': String(rateLimit.remaining),
+      'X-RateLimit-Reset': String(rateLimit.resetTime)
+    };
+
+    if (!rateLimit.allowed) {
+      return sendJSON(res, 429, { 
+        error: 'Too many requests. Please wait a moment before sending another message.' 
+      }, rateLimitHeaders);
+    }
+
+    if (!GROQ_KEY || GROQ_KEY === 'your_groq_api_key_here') {
+      return sendJSON(res, 503, { 
+        error: 'Groq API key not configured on server. Set GROQ_API_KEY in server/.env.' 
+      }, rateLimitHeaders);
+    }
+
+    let rawBody = '';
+    req.on('data', chunk => { rawBody += chunk; });
+    req.on('end', async () => {
+      const parsed = parseJSON(rawBody);
+      if (!parsed || !parsed.prompt) {
+        return sendJSON(res, 400, { error: 'Prompt is required' }, rateLimitHeaders);
+      }
+
+      try {
+        const groqRes = await groqRequest({
+          model: 'llama-3.1-8b-instant',
+          messages: [
+            {
+              role: 'system',
+              content: `You are Planrova AI, a privacy-first assistant for the Planrova Personal Life OS.
+Respond helpfully, clearly, and concisely. Use ONLY the user's provided context when answering factual questions.
+Never give speculative medical, psychological, or financial investment advice.
+If the user asks to create or schedule a task, suggest it clearly.`
+            },
+            ...(parsed.context ? [{ role: 'user', content: `[Authorized Context]:\n${parsed.context}` }] : []),
+            { role: 'user', content: parsed.prompt }
+          ],
+          temperature: 0.3,
+          max_tokens: 800
+        });
+
+        const data = parseJSON(groqRes.body);
+        const reply = data?.choices?.[0]?.message?.content || 'Unable to generate response.';
+
+        return sendJSON(res, 200, {
+          text: reply,
+          suggestedProposals: []
+        }, rateLimitHeaders);
+      } catch (err) {
+        return sendJSON(res, 502, { error: `AI upstream error: ${err.message}` }, rateLimitHeaders);
+      }
+    });
+    return;
   }
 
   // 2. OCR Vision Proxy Endpoint

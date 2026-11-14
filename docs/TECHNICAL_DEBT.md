@@ -30,3 +30,44 @@ As part of our commitment to transparent and zero-technical-debt engineering, th
 
 ### 2.5 Non-Overlapping Grade Point Scales
 - **Mitigation**: Defined explicit boundaries (`93 - 100`, `90 - 92.99`, `87 - 89.99`) ensuring zero ambiguity when mapping scores to grade points across US 4.0, 10-Point, and Percentage scales.
+
+---
+
+## 3. Phase 5 Finance & Wellbeing Architecture Log
+
+### 3.1 Bundler Chunk Warnings & Dynamic Imports
+- **Issue**: Vite emits warnings for the main vendor chunk `dist/assets/index-*.js` exceeding 500 kB (~840 kB raw, ~250 kB gzipped) due to Firebase v12 SDK, date utilities, and shared vendors.
+- **Current State**: Phase 5 workspaces are cleanly code-split into dynamic chunks:
+  - `dist/assets/finance.ui-*.js` (17.07 kB)
+  - `dist/assets/wellbeing.ui-*.js` (12.02 kB)
+  - `dist/assets/academic.ui-*.js` (40.71 kB)
+  The app builds in ~439ms with zero runtime blocking.
+- **Future Action**: In Phase 6, implement granular rollup manual chunking for Firebase sub-libraries (`@firebase/auth`, `@firebase/firestore`).
+
+### 3.2 Cross-Platform Mobile Parity & Environment Constraints
+- **Observation**:
+  - *Web Platform*: Implements 100% of desktop workspace capabilities including comprehensive transaction filters, budget cards, savings goals, hydration widgets, routine checklists, and check-in inputs.
+  - *Mobile Platform*: Implements `FinanceScreen.js` and `WellbeingScreen.js` connected through React Navigation (`RootNavigator.js`) and accessible via `WorkspaceHubModal.js`.
+- **Environment Limitation**: Native Android Gradle / APK compilation and physical device testing cannot run in this headless Linux container environment because the Android SDK and emulators are not provisioned. Static React Native checks and shared domain tests passed 100%.
+
+### 3.3 Double-Entry Ledger Simplification
+- **Observation**: Transfers between user accounts are supported cleanly, updating source and destination account balances while excluding transfers from income/expense metrics.
+- **Future Action**: Full dual-entry T-accounts and multi-currency exchange rate conversions are slated for Phase 6 (Personal Finance & Professional Deliverables).
+
+---
+
+## 4. Phase 6 Reliability & Hybrid AI Assistance Log
+
+### 4.1 Bundler Chunk Warning Resolution
+- **Resolution**: Vite's main application chunk was successfully reduced from 840.57 kB to 138.74 kB (-83.5%) by extracting `@firebase/*` into a dedicated `vendor-firebase` chunk. The > 500 kB chunk warning is completely eliminated.
+
+### 4.2 Recurring Payment Fault Tolerance
+- **Resolution**: Added `allowIdempotentReplay`, ledger reconciliation `reconcileRecurringPaymentState()`, and payment reversal `reverseRecurringPaymentOccurrence()`, resolving partial-failure edge cases when crashes occur between transaction creation and due-date advancement.
+
+### 4.3 Mobile Academic Parity
+- **Resolution**: Implemented Leitner 5-box interactive flashcard review player and GPA What-If target simulator in `mobile/src/screens/AcademicScreen.js`.
+
+### 4.4 Remaining Environmental Constraints
+- **Limitation**: Native Android Gradle APK packaging and physical device touch validation remain unverified due to lack of Android SDK/virtualization in this container. React Native code syntax was verified with `node --check`.
+
+

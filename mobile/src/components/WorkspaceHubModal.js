@@ -99,6 +99,15 @@ const MODULES = [
     icon: 'heart',
     color: '#EC4899',
     bgColor: 'rgba(236, 72, 153, 0.15)'
+  },
+  {
+    id: 'ai',
+    screenName: 'AIAssistantWorkspace',
+    title: 'AI Assistant',
+    desc: 'Privacy-first daily planning',
+    icon: 'sparkles',
+    color: '#C2A878',
+    bgColor: 'rgba(194, 168, 120, 0.15)'
   }
 ];
 

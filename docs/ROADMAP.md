@@ -44,12 +44,25 @@
 - Universal Quick Capture extended for finance and wellbeing intents with ambiguity checks.
 - Dedicated Web workspaces (`finance.ui.js`, `wellbeing.ui.js`) and Mobile screens (`FinanceScreen.js`, `WellbeingScreen.js`).
 
+### Phase 6: Reliability Foundation, Architecture Maturity & Privacy-First Hybrid AI Assistance
+- Resolved Vite > 500 kB chunk warning: reduced main application bundle by 83.5% (840 kB to 138 kB) via `@firebase/*` vendor chunking.
+- Fault-tolerant recurring payment recovery: idempotent replay, transaction ledger reconciliation, and soft-deleted occurrence reversal.
+- Mobile academic parity: interactive Leitner 5-box review player and GPA What-If target simulator in `AcademicScreen.js`.
+- Privacy-first Hybrid AI Assistance domain (`shared/domain/ai/`):
+  - Strict opt-in default (`enabled: false`) with per-domain category consent toggling.
+  - Context minimization engine stripping credentials, account numbers, and private check-in reflections.
+  - Proposal-and-approval workflow: AI cannot directly mutate state; requires explicit user approval.
+  - Anti-prompt-injection guardrails and daily usage limits (30 req/day).
+  - Provider abstraction with deterministic local mock fallback and secure server proxy (`server/proxy.js`).
+- Dedicated Web AI Assistant workspace (`ai.ui.js`) and Mobile AI Assistant screen (`AIAssistantScreen.js`).
+- Automated Daily Intelligence Briefing using authorized context.
+
 ---
 
 ## Upcoming Milestones
 
-### Phase 6: Professional Projects, Invoicing & Dual-Entry Ledger
-- Dual-entry T-account accounting and multi-currency exchange rate tables.
+### Phase 7: Professional Projects, Invoicing, Dual-Entry Ledger & Real-Time Sync
+- Dual-entry T-account ledger and multi-currency exchange rate tables.
 - Professional project roadmaps, client milestones, and invoice generation.
-- Biometric telemetry correlation with deep work focus sessions.
-- Biometric audio soundscapes and dynamic session pacing.
+- Real-time Server-Sent Events (SSE) AI streaming and collaborative studypool audio soundscapes.
+

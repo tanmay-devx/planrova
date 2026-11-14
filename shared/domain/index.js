@@ -34,3 +34,7 @@ export * from './finance/index.js';
 
 // Wellbeing Domain
 export * from './wellbeing/index.js';
+
+// Hybrid AI Assistance
+export * from './ai/index.js';
+

@@ -19,6 +19,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFirestoreData } from '../hooks/useFirestoreData';
 import { ACADEMIC_STORAGE_KEYS } from '../../../shared/domain/academic/academic.types';
 import { computeAcademicDashboard } from '../../../shared/domain/academic/academic-dashboard.engine';
+import { generateReviewQueue, processFlashcardReview } from '../../../shared/domain/academic/spaced-repetition.engine';
+import { simulateMultiSemesterTarget } from '../../../shared/domain/academic/gpa.engine';
 
 export default function AcademicScreen({ navigation }) {
   const [courses, setCourses] = useFirestoreData(ACADEMIC_STORAGE_KEYS.COURSES, []);
@@ -32,6 +34,18 @@ export default function AcademicScreen({ navigation }) {
   const [newCourseName, setNewCourseName] = useState('');
   const [newCourseCode, setNewCourseCode] = useState('');
   const [newCourseCredits, setNewCourseCredits] = useState('3');
+
+  // Leitner Spaced Repetition Flashcard Player State
+  const [flashcardModalVisible, setFlashcardModalVisible] = useState(false);
+  const [reviewQueue, setReviewQueue] = useState([]);
+  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [isCardFlipped, setIsCardFlipped] = useState(false);
+
+  // GPA What-If Target Simulator State
+  const [gpaModalVisible, setGpaModalVisible] = useState(false);
+  const [targetCGPAInput, setTargetCGPAInput] = useState('3.80');
+  const [upcomingCreditsInput, setUpcomingCreditsInput] = useState('15');
+  const [simulationResult, setSimulationResult] = useState(null);
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const activeSemester = semesters.find(s => s.status === 'active') || semesters[0] || { name: 'Current Semester' };
@@ -69,6 +83,58 @@ export default function AcademicScreen({ navigation }) {
     setAddCourseModalVisible(false);
   };
 
+  const handleStartReview = () => {
+    const queue = generateReviewQueue({ flashcards, referenceDateStr: todayStr });
+    if (!queue || queue.length === 0) {
+      Alert.alert('All Caught Up', 'No flashcards are due for review today!');
+      return;
+    }
+    setReviewQueue(queue);
+    setCurrentCardIndex(0);
+    setIsCardFlipped(false);
+    setFlashcardModalVisible(true);
+  };
+
+  const handleRateCard = (rating) => {
+    const currentCard = reviewQueue[currentCardIndex];
+    if (!currentCard) return;
+
+    const { updatedCard } = processFlashcardReview({
+      flashcard: currentCard,
+      rating,
+      todayStr
+    });
+
+    const updatedFlashcards = flashcards.map(f => f.id === currentCard.id ? updatedCard : f);
+    setFlashcards(updatedFlashcards);
+
+    if (currentCardIndex + 1 < reviewQueue.length) {
+      setCurrentCardIndex(currentCardIndex + 1);
+      setIsCardFlipped(false);
+    } else {
+      setFlashcardModalVisible(false);
+      Alert.alert('Session Complete', 'Great job! You reviewed all due cards.');
+    }
+  };
+
+  const handleRunGPASimulation = () => {
+    const currentCGPA = dashboard.semesterSummary.currentSGPA || 3.5;
+    const completedCredits = dashboard.semesterSummary.totalCredits || 15;
+    const targetCGPA = parseFloat(targetCGPAInput) || 3.8;
+    const upcomingCredits = parseFloat(upcomingCreditsInput) || 15;
+
+    const result = simulateMultiSemesterTarget({
+      currentCGPA,
+      completedCredits,
+      upcomingSemesters: [{ name: 'Upcoming Semester', credits: upcomingCredits }],
+      targetCGPA
+    });
+
+    setSimulationResult(result);
+  };
+
+  const currentReviewCard = reviewQueue[currentCardIndex];
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -89,13 +155,19 @@ export default function AcademicScreen({ navigation }) {
 
         {/* Metrics Grid */}
         <View style={styles.metricsRow}>
-          <View style={styles.metricCard}>
+          <TouchableOpacity 
+            style={styles.metricCard}
+            onPress={() => {
+              handleRunGPASimulation();
+              setGpaModalVisible(true);
+            }}
+          >
             <Text style={styles.metricLabel}>Current SGPA</Text>
             <Text style={styles.metricValue}>
               {dashboard.semesterSummary.currentSGPA > 0 ? dashboard.semesterSummary.currentSGPA.toFixed(2) : '—'}
             </Text>
-            <Text style={styles.metricSub}>Scale 4.0</Text>
-          </View>
+            <Text style={[styles.metricSub, { color: '#C2A878' }]}>Simulate ↗</Text>
+          </TouchableOpacity>
 
           <View style={styles.metricCard}>
             <Text style={styles.metricLabel}>Credits</Text>
@@ -119,7 +191,7 @@ export default function AcademicScreen({ navigation }) {
               <Text style={styles.bannerTitle}>Spaced Repetition Due</Text>
               <Text style={styles.bannerSub}>{dashboard.flashcardsSummary.totalDue} card(s) ready for review</Text>
             </View>
-            <TouchableOpacity style={styles.reviewBtn}>
+            <TouchableOpacity style={styles.reviewBtn} onPress={handleStartReview}>
               <Text style={styles.reviewBtnText}>Review</Text>
             </TouchableOpacity>
           </View>
@@ -237,6 +309,131 @@ export default function AcademicScreen({ navigation }) {
                 <Text style={styles.modalSaveBtnText}>Save</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Interactive Leitner Spaced Repetition Player Modal */}
+      <Modal
+        visible={flashcardModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setFlashcardModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxHeight: '85%' }]}>
+            <View style={styles.reviewModalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Flashcard Review</Text>
+                <Text style={styles.cardProgressText}>
+                  Card {currentCardIndex + 1} of {reviewQueue.length} • Box {currentReviewCard?.box || 1}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setFlashcardModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#a8a29e" />
+              </TouchableOpacity>
+            </View>
+
+            {currentReviewCard ? (
+              <View style={styles.flashcardContainer}>
+                <TouchableOpacity 
+                  style={[styles.flashcardBox, isCardFlipped && styles.flashcardBoxFlipped]}
+                  activeOpacity={0.8}
+                  onPress={() => setIsCardFlipped(!isCardFlipped)}
+                >
+                  <Text style={styles.cardSideLabel}>{isCardFlipped ? 'ANSWER' : 'QUESTION (TAP TO FLIP)'}</Text>
+                  <Text style={styles.cardContentText}>
+                    {isCardFlipped ? (currentReviewCard.back || currentReviewCard.answer) : (currentReviewCard.front || currentReviewCard.question)}
+                  </Text>
+                  {currentReviewCard.courseName && (
+                    <Text style={styles.cardCourseLabel}>{currentReviewCard.courseName}</Text>
+                  )}
+                </TouchableOpacity>
+
+                {isCardFlipped ? (
+                  <View style={styles.ratingBtnGrid}>
+                    <TouchableOpacity style={[styles.ratingBtn, { backgroundColor: '#ef4444' }]} onPress={() => handleRateCard('again')}>
+                      <Text style={styles.ratingBtnText}>Again (Box 1)</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.ratingBtn, { backgroundColor: '#f59e0b' }]} onPress={() => handleRateCard('hard')}>
+                      <Text style={styles.ratingBtnText}>Hard</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.ratingBtn, { backgroundColor: '#10b981' }]} onPress={() => handleRateCard('good')}>
+                      <Text style={styles.ratingBtnText}>Good (+1)</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.ratingBtn, { backgroundColor: '#3b82f6' }]} onPress={() => handleRateCard('easy')}>
+                      <Text style={styles.ratingBtnText}>Easy (+1)</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity style={styles.flipBtn} onPress={() => setIsCardFlipped(true)}>
+                    <Text style={styles.flipBtnText}>Show Answer</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : (
+              <Text style={styles.emptyText}>No cards available.</Text>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* GPA What-If Target Simulator Modal */}
+      <Modal
+        visible={gpaModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setGpaModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.reviewModalHeader}>
+              <Text style={styles.modalTitle}>GPA What-If Simulator</Text>
+              <TouchableOpacity onPress={() => setGpaModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#a8a29e" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.inputLabel}>Target CGPA</Text>
+            <TextInput
+              style={styles.modalInput}
+              keyboardType="numeric"
+              value={targetCGPAInput}
+              onChangeText={(val) => {
+                setTargetCGPAInput(val);
+                setTimeout(handleRunGPASimulation, 50);
+              }}
+            />
+
+            <Text style={styles.inputLabel}>Upcoming Semester Credits</Text>
+            <TextInput
+              style={styles.modalInput}
+              keyboardType="numeric"
+              value={upcomingCreditsInput}
+              onChangeText={(val) => {
+                setUpcomingCreditsInput(val);
+                setTimeout(handleRunGPASimulation, 50);
+              }}
+            />
+
+            {simulationResult && (
+              <View style={styles.simResultCard}>
+                <Text style={styles.simResultLabel}>Required Upcoming SGPA:</Text>
+                <Text style={[styles.simResultValue, { color: simulationResult.isFeasible ? '#10b981' : '#ef4444' }]}>
+                  {simulationResult.requiredSGPA !== null ? simulationResult.requiredSGPA.toFixed(2) : 'N/A'}
+                </Text>
+                <Text style={[styles.simBadge, { color: simulationResult.isFeasible ? '#10b981' : '#ef4444' }]}>
+                  {simulationResult.isFeasible ? '✓ Feasible Target' : '⚠ Exceeds Scale Maximum (4.0)'}
+                </Text>
+              </View>
+            )}
+
+            <TouchableOpacity 
+              style={[styles.modalSaveBtn, { marginTop: 16 }]}
+              onPress={() => setGpaModalVisible(false)}
+            >
+              <Text style={styles.modalSaveBtnText}>Close</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -516,6 +713,107 @@ const styles = StyleSheet.create({
   modalSaveBtnText: {
     color: '#000',
     fontSize: 12,
+    fontWeight: '700'
+  },
+  reviewModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16
+  },
+  cardProgressText: {
+    fontSize: 11,
+    color: '#a8a29e',
+    marginTop: 2
+  },
+  flashcardContainer: {
+    marginTop: 8
+  },
+  flashcardBox: {
+    minHeight: 180,
+    backgroundColor: '#1E232A',
+    borderColor: 'rgba(194, 168, 120, 0.3)',
+    borderWidth: 1.5,
+    borderRadius: 14,
+    padding: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20
+  },
+  flashcardBoxFlipped: {
+    borderColor: '#10b981',
+    backgroundColor: '#16222F'
+  },
+  cardSideLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+    color: '#C2A878',
+    marginBottom: 12
+  },
+  cardContentText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    textAlign: 'center',
+    lineHeight: 24
+  },
+  cardCourseLabel: {
+    fontSize: 10,
+    color: '#a8a29e',
+    marginTop: 14
+  },
+  flipBtn: {
+    backgroundColor: 'rgba(194, 168, 120, 0.15)',
+    borderColor: '#C2A878',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center'
+  },
+  flipBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#C2A878'
+  },
+  ratingBtnGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'space-between'
+  },
+  ratingBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center'
+  },
+  ratingBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#fff'
+  },
+  simResultCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 14,
+    marginTop: 8,
+    alignItems: 'center'
+  },
+  simResultLabel: {
+    fontSize: 11,
+    color: '#a8a29e',
+    textTransform: 'uppercase',
+    fontWeight: '600'
+  },
+  simResultValue: {
+    fontSize: 26,
+    fontWeight: '800',
+    marginVertical: 4
+  },
+  simBadge: {
+    fontSize: 11,
     fontWeight: '700'
   }
 });
