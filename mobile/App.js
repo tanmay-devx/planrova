@@ -27,6 +27,7 @@ import { requestNotificationPermission } from './src/utils/notifications';
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
 import { navigationRef, navigate } from './src/navigation/navigationRef';
+import { callOcrProxy } from './src/config/api';
 
 const CustomTheme = {
   ...DefaultTheme,
@@ -221,48 +222,60 @@ export default function App() {
       return;
     }
 
-    if (!groqKey) {
-      setTimeout(useMockFallback, 2400);
-      return;
-    }
-
-    const activeKey = groqKey;
+    const payload = {
+      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'Analyze this timetable image. Extract all classes and lectures for each weekday: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, and Sunday. For each class/lecture, identify the subject name, the time duration (use format HH:MM AM/PM - HH:MM AM/PM, e.g. 09:00 AM - 10:30 AM), and the room number/classroom (e.g. LHC-101 or Room 101) if visible. Return ONLY a valid JSON object matching this structure (do not include backticks, markdown, or any conversational text, just the raw JSON object):\n{\n  "Monday": [ { "id": "m1", "subject": "Subject Name", "time": "09:00 AM - 10:30 AM", "room": "LHC-101" } ],\n  "Tuesday": [],\n  "Wednesday": [],\n  "Thursday": [],\n  "Friday": [],\n  "Saturday": [],\n  "Sunday": []\n}'
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:image/jpeg;base64,${base64Data}`
+            }
+          }
+        ]
+      }],
+      max_tokens: 2048,
+      temperature: 0.1
+    };
 
     const makeRequest = async () => {
-      return await fetch(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${activeKey}`
-          },
-          body: JSON.stringify({
-            model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-            messages: [{
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: 'Analyze this timetable image. Extract all classes and lectures for each weekday: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, and Sunday. For each class/lecture, identify the subject name, the time duration (use format HH:MM AM/PM - HH:MM AM/PM, e.g. 09:00 AM - 10:30 AM), and the room number/classroom (e.g. LHC-101 or Room 101) if visible. Return ONLY a valid JSON object matching this structure (do not include backticks, markdown, or any conversational text, just the raw JSON object):\n{\n  "Monday": [ { "id": "m1", "subject": "Subject Name", "time": "09:00 AM - 10:30 AM", "room": "LHC-101" } ],\n  "Tuesday": [],\n  "Wednesday": [],\n  "Thursday": [],\n  "Friday": [],\n  "Saturday": [],\n  "Sunday": []\n}'
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:image/jpeg;base64,${base64Data}`
-                  }
-                }
-              ]
-            }],
-            max_tokens: 2048,
-            temperature: 0.1
-          })
-        }
-      );
+      // 1. Try server proxy first (secure, server-side Groq key)
+      try {
+        const proxyResponse = await callOcrProxy(payload, 'timetable');
+        if (proxyResponse && proxyResponse.ok) return proxyResponse;
+      } catch (proxyErr) {
+        console.log('[Timetable] Proxy attempt failed, checking fallback:', proxyErr.message);
+      }
+
+      // 2. Direct client fallback if user provided personal key
+      if (groqKey) {
+        return await fetch(
+          'https://api.groq.com/openai/v1/chat/completions',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${groqKey}`
+            },
+            body: JSON.stringify(payload)
+          }
+        );
+      }
+
+      // 3. Fallback mock if neither is available
+      useMockFallback();
+      return null;
     };
 
     try {
       let response = await makeRequest();
+      if (!response) return; // Mock fallback already handled UI
+
       if (!response.ok && (response.status === 404 || response.status === 503)) {
         await new Promise(resolve => setTimeout(resolve, 2000));
         response = await makeRequest();

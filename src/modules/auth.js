@@ -8,7 +8,8 @@ import {
   sendPasswordResetEmail
 } from 'firebase/auth';
 import { startRealtimeSync, stopRealtimeSync, syncPendingChanges } from '../db/syncEngine.js';
-import { getStorageItem } from '../utils/storage.js';
+import { getStorageItem, clearMemoryCache, setCurrentUserId, preloadCache } from '../utils/storage.js';
+import { localDB } from '../db/database.js';
 
 function triggerWelcomeAnimation() {
   if (sessionStorage.getItem('welcome_shown')) return;
@@ -119,6 +120,27 @@ export function initAuth() {
   if (forgotLink) forgotLink.addEventListener('click', () => setAuthMode('forgot'));
   if (backToLoginBtn) backToLoginBtn.addEventListener('click', () => setAuthMode('login'));
 
+  // Observable Sync Status Listener for UI transparency
+  if (typeof window !== 'undefined') {
+    window.addEventListener('planrova:sync_status', (e) => {
+      if (!auth.currentUser || !authBtn) return;
+      const { state, pendingCount } = e.detail || {};
+      if (state === 'syncing') {
+        authBtn.innerHTML = `<span class="auth-dot" style="width: 6px; height: 6px; background: var(--accent); border-radius: 50%; display: inline-block; margin-right: 4px;"></span>Syncing${pendingCount ? ` (${pendingCount})` : ''}`;
+        authBtn.style.color = 'var(--accent)';
+      } else if (state === 'synced') {
+        authBtn.innerHTML = `<span class="auth-dot" style="width: 6px; height: 6px; background: var(--color-success); border-radius: 50%; display: inline-block; margin-right: 4px;"></span>Synced`;
+        authBtn.style.color = 'var(--color-success)';
+      } else if (state === 'offline') {
+        authBtn.innerHTML = `<span class="auth-dot" style="width: 6px; height: 6px; background: var(--text-muted); border-radius: 50%; display: inline-block; margin-right: 4px;"></span>Offline`;
+        authBtn.style.color = 'var(--text-muted)';
+      } else if (state === 'error') {
+        authBtn.innerHTML = `<span class="auth-dot" style="width: 6px; height: 6px; background: var(--color-high); border-radius: 50%; display: inline-block; margin-right: 4px;"></span>Sync Error`;
+        authBtn.style.color = 'var(--color-high)';
+      }
+    });
+  }
+
   // Handle Auth State Changes
   onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -142,6 +164,9 @@ export function initAuth() {
       authModal.classList.add('hidden');
       if (closeBtn) closeBtn.style.display = '';
       
+      // Set active user scope in storage
+      setCurrentUserId(user.uid);
+
       // Start Background Sync Engine!
       startRealtimeSync();
       syncPendingChanges(); // initial push if any
@@ -149,7 +174,11 @@ export function initAuth() {
       // Welcome Loader Animation
       triggerWelcomeAnimation();
     } else {
-      // Logged out
+      // Logged out — stop sync and clear scoped caches to prevent account cross-contamination
+      stopRealtimeSync();
+      clearMemoryCache();
+      setCurrentUserId('local');
+
       const statusDot = '<span class="auth-dot" style="width: 6px; height: 6px; background: var(--text-muted); border-radius: 50%; display: inline-block; margin-right: 4px;"></span>';
       authBtn.innerHTML = statusDot + 'Off';
       authBtn.style.color = 'var(--text-muted)';
@@ -157,8 +186,6 @@ export function initAuth() {
       
       authModal.classList.remove('hidden');
       if (closeBtn) closeBtn.style.display = 'none';
-      
-      stopRealtimeSync();
     }
   });
 

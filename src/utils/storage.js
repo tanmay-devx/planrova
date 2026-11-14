@@ -8,18 +8,43 @@
 
 import { localDB, createSyncRecord } from '../db/database.js';
 import { syncPendingChanges } from '../db/syncEngine.js';
+import { auth } from '../db/firebase.js';
 
 const _cache = new Map();
 let _cacheLoaded = false;
+let _currentUserId = null;
 
-// ── 1. Preload Cache from Dexie on Startup ───────────────
-export async function preloadCache() {
-  if (_cacheLoaded) return;
+export function getCurrentUserId() {
+  if (auth && auth.currentUser) {
+    return auth.currentUser.uid;
+  }
+  return _currentUserId || 'local';
+}
+
+export function setCurrentUserId(userId) {
+  _currentUserId = userId || 'local';
+}
+
+// ── 1. Clear In-Memory Cache (Used on Logout / Account Switch) ─────────
+export function clearMemoryCache() {
+  _cache.clear();
+  _cacheLoaded = false;
+  _currentUserId = null;
+}
+
+// ── 2. Preload Cache from Dexie on Startup ─────────────────────────────
+export async function preloadCache(userId = null) {
+  const activeUser = userId || getCurrentUserId();
+  _currentUserId = activeUser;
+  _cache.clear();
+
   try {
+    // Read all records for active user or legacy 'local' records
     const records = await localDB.kv_store.toArray();
     records.forEach(record => {
-      // Ignore records marked as deleted
-      if (!record.deleted) {
+      // Allow records matching active user or unpartitioned legacy records
+      const matchesUser = !record.user_id || record.user_id === activeUser || record.user_id === 'local';
+      if (matchesUser && !record.deleted) {
         try {
           _cache.set(record.id, JSON.parse(record.value));
         } catch {
@@ -28,33 +53,35 @@ export async function preloadCache() {
       }
     });
     _cacheLoaded = true;
-    console.log(`[Storage] Preloaded ${_cache.size} keys from Dexie instantly.`);
+    console.log(`[Storage] Preloaded ${_cache.size} keys from Dexie for user: ${activeUser}`);
   } catch (error) {
     console.error('[Storage] Failed to preload Dexie cache:', error);
     _cacheLoaded = true; // prevent infinite loading loop
   }
 }
 
-// ── 2. Listen for Cloud Updates ──────────────────────────
+// ── 3. Listen for Cloud Updates ────────────────────────────────────────
 // When Sync Engine pulls newer data from Firebase, update cache
-window.addEventListener('planrova:cloud_update', async (e) => {
-  const { key } = e.detail;
-  try {
-    const record = await localDB.kv_store.get(key);
-    if (record && !record.deleted) {
-      const parsedValue = typeof record.value === 'string' ? JSON.parse(record.value) : record.value;
-      _cache.set(key, parsedValue);
-      // Optional: Dispatch a global event here if UI needs to re-render immediately
-      window.dispatchEvent(new Event('planrova:data_changed'));
-    } else if (record && record.deleted) {
-      _cache.delete(key);
+if (typeof window !== 'undefined') {
+  window.addEventListener('planrova:cloud_update', async (e) => {
+    const { key } = e.detail;
+    try {
+      const record = await localDB.kv_store.get(key);
+      if (record && !record.deleted) {
+        const parsedValue = typeof record.value === 'string' ? JSON.parse(record.value) : record.value;
+        _cache.set(key, parsedValue);
+        window.dispatchEvent(new CustomEvent('planrova:data_changed', { detail: { key, value: parsedValue } }));
+      } else if (record && record.deleted) {
+        _cache.delete(key);
+        window.dispatchEvent(new CustomEvent('planrova:data_changed', { detail: { key, deleted: true } }));
+      }
+    } catch (err) {
+      console.error('[Storage] Error processing cloud update for', key, err);
     }
-  } catch (err) {
-    console.error('[Storage] Error processing cloud update for', key, err);
-  }
-});
+  });
+}
 
-// ── 3. PUBLIC API (Synchronous UI Access) ────────────────
+// ── 4. PUBLIC API (Synchronous UI Access) ──────────────────────────────
 
 /**
  * Read (Instant) — Returns from memory cache.
@@ -73,10 +100,11 @@ export function setStorageItem(key, value) {
   // 1. Update UI Cache instantly
   _cache.set(key, value);
 
-  // 2. Wrap payload with Sync metadata
-  const record = createSyncRecord(key, value);
+  // 2. Wrap payload with Sync metadata and active user scope
+  const activeUser = getCurrentUserId();
+  const record = createSyncRecord(key, value, activeUser);
 
-  // 3. Write to local Dexie database (Async, don't await)
+  // 3. Write to local Dexie database (Async, don't block caller)
   localDB.kv_store.put(record).then(() => {
     // 4. Tell Sync Engine to push pending changes to Firebase
     syncPendingChanges();
@@ -93,7 +121,8 @@ export function removeStorageItem(key) {
   _cache.delete(key);
 
   // 2. Mark as deleted in local database
-  const record = createSyncRecord(key, null);
+  const activeUser = getCurrentUserId();
+  const record = createSyncRecord(key, null, activeUser);
   record.deleted = true;
 
   localDB.kv_store.put(record).then(() => {

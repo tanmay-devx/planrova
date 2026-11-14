@@ -1,5 +1,6 @@
 import { getStorageItem, setStorageItem } from '../utils/storage.js';
-import { formatDate } from '../utils/date.js';
+import { formatDate, parseLocalDate } from '../utils/date.js';
+import { toMinorUnits, fromMinorUnits, validateExpense } from '../db/validation.js';
 
 const BUDGET_SETTINGS_KEY = 'budget_settings';
 const EXPENSES_KEY = 'expenses';
@@ -26,11 +27,15 @@ function updateBudgetUI(settings, expenses) {
   const currentYear = today.getFullYear();
   
   const monthlyExpenses = expenses.filter(exp => {
-    const expDate = new Date(exp.date);
+    const expDate = parseLocalDate(exp.date);
     return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
   });
   
-  const totalSpent = monthlyExpenses.reduce((sum, item) => sum + parseFloat(item.amount), 0);
+  const totalSpentMinor = monthlyExpenses.reduce((sum, item) => {
+    const minor = typeof item.amount_minor === 'number' ? item.amount_minor : toMinorUnits(item.amount);
+    return sum + minor;
+  }, 0);
+  const totalSpent = fromMinorUnits(totalSpentMinor);
   
   // Update spending ratio text
   const spendingRatio = document.getElementById('budget-spending-ratio');
@@ -100,21 +105,23 @@ function renderInsights(monthlyExpenses, totalSpent) {
     return;
   }
   
-  // Group by category
-  const categoriesMap = {};
+  // Group by category using minor units
+  const categoriesMapMinor = {};
   monthlyExpenses.forEach(exp => {
-    categoriesMap[exp.category] = (categoriesMap[exp.category] || 0) + parseFloat(exp.amount);
+    const minor = typeof exp.amount_minor === 'number' ? exp.amount_minor : toMinorUnits(exp.amount);
+    categoriesMapMinor[exp.category] = (categoriesMapMinor[exp.category] || 0) + minor;
   });
   
   // Find highest category
   let maxCat = '';
-  let maxVal = 0;
-  Object.keys(categoriesMap).forEach(cat => {
-    if (categoriesMap[cat] > maxVal) {
-      maxVal = categoriesMap[cat];
+  let maxValMinor = 0;
+  Object.keys(categoriesMapMinor).forEach(cat => {
+    if (categoriesMapMinor[cat] > maxValMinor) {
+      maxValMinor = categoriesMapMinor[cat];
       maxCat = cat;
     }
   });
+  const maxVal = fromMinorUnits(maxValMinor);
   
   const pct = Math.round((maxVal / totalSpent) * 100);
   
@@ -215,13 +222,13 @@ function setupBudgetEvents(settings, expenses) {
       const date = document.getElementById('expense-date').value;
       const notes = document.getElementById('expense-notes').value.trim();
       
-      const newExpense = {
+      const newExpense = validateExpense({
         id: 'exp_' + Date.now(),
         amount: parseFloat(amount),
         category,
         date,
         notes
-      };
+      });
       
       expenses.push(newExpense);
       setStorageItem(EXPENSES_KEY, expenses);

@@ -129,8 +129,8 @@ export function renderGrid() {
     renderPinnedNoteInsideColumn(col, dayStr);
 
     // If day has no tasks and no pinned note, show premium empty state
-    const notes = getStorageItem('notes', {});
-    const note = notes[dayStr];
+    const notes = getStorageItem('notes', []);
+    const note = Array.isArray(notes) ? notes.find(n => n.date === dayStr) : (notes && notes[dayStr]);
     const hasPinnedNote = note && note.pinned;
     if (dayTasks.length === 0 && !hasPinnedNote) {
       const emptyDiv = document.createElement('div');

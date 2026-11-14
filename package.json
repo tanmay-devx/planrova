@@ -1,21 +1,21 @@
 {
-  "name": "radhe",
-  "version": "0.0.0",
+  "name": "planrova",
+  "version": "2.0.0-alpha.1",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "proxy": "node server/proxy.js"
   },
   "devDependencies": {
-    "puppeteer": "^25.0.4",
-    "vite": "^8.0.12"
+    "vite": "^8.0.12",
+    "vitest": "^5.1.0"
   },
   "dependencies": {
-    "@dnd-kit/core": "^6.3.1",
-    "@dnd-kit/sortable": "^10.0.0",
-    "@dnd-kit/utilities": "^3.2.2",
     "dexie": "^4.4.2",
     "firebase": "^12.13.0",
     "qrcode": "^1.5.4"

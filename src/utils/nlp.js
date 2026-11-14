@@ -264,7 +264,7 @@ function parseTime(text, dateFound, now) {
       textWithoutTime = textWithoutTime.replace(match[0], '');
     } else {
       match = textLower.match(englishTimeRegex);
-      if (match && !dateFound) {
+      if (match && (match[3] || match[0].includes('at') || !dateFound)) {
         let hours = parseInt(match[1]);
         let minutes = match[2] ? parseInt(match[2]) : 0;
         let meridian = match[3];

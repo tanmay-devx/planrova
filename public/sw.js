@@ -1,8 +1,9 @@
-const CACHE_NAME = 'planory-v1';
+const CACHE_NAME = 'planrova-v2';
 const ASSETS = [
   '/',
   '/index.html',
-  '/favicon.svg',
+  '/favicon.ico',
+  '/icons.svg',
   '/site.webmanifest'
 ];
 
