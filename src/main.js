@@ -168,16 +168,18 @@ function setupGeneralUI() {
     });
   }
 
-  // View switches (Weekly Timetable vs Dedicated Month Calendar vs Focus Forest vs Social Studypool vs Today Plan)
+  // View switches (Weekly Timetable vs Dedicated Month Calendar vs Focus Forest vs Social Studypool vs Today Plan vs Academic)
   const viewWeeklyBtn = document.getElementById('view-weekly-btn');
   const viewCalendarBtn = document.getElementById('view-calendar-btn');
   const viewPlanBtn = document.getElementById('view-plan-btn');
+  const viewAcademicBtn = document.getElementById('view-academic-btn');
   const viewForestBtn = document.getElementById('sidebar-nav-forest');
   const viewStudypoolBtn = document.getElementById('sidebar-nav-studypool');
   
   const weeklyGrid = document.getElementById('weekly-grid-view');
   const monthlyCalendar = document.getElementById('monthly-calendar-view');
   const todayPlanView = document.getElementById('today-plan-view');
+  const academicWorkspaceView = document.getElementById('academic-workspace-view');
   const forestView = document.getElementById('forest-garden-view');
   const studypoolView = document.getElementById('studypool-view');
 
@@ -185,10 +187,11 @@ function setupGeneralUI() {
     if (weeklyGrid) weeklyGrid.classList.add('hidden');
     if (monthlyCalendar) monthlyCalendar.classList.add('hidden');
     if (todayPlanView) todayPlanView.classList.add('hidden');
+    if (academicWorkspaceView) academicWorkspaceView.classList.add('hidden');
     if (forestView) forestView.classList.add('hidden');
     if (studypoolView) studypoolView.classList.add('hidden');
 
-    [viewWeeklyBtn, viewCalendarBtn, viewPlanBtn, viewForestBtn, viewStudypoolBtn].forEach(btn => {
+    [viewWeeklyBtn, viewCalendarBtn, viewPlanBtn, viewAcademicBtn, viewForestBtn, viewStudypoolBtn].forEach(btn => {
       if (btn) btn.classList.remove('active');
     });
 
@@ -204,6 +207,10 @@ function setupGeneralUI() {
       if (todayPlanView) todayPlanView.classList.remove('hidden');
       if (viewPlanBtn) viewPlanBtn.classList.add('active');
       renderTodayPlan();
+    } else if (viewId === 'academic') {
+      if (academicWorkspaceView) academicWorkspaceView.classList.remove('hidden');
+      if (viewAcademicBtn) viewAcademicBtn.classList.add('active');
+      import('./modules/academic/academic.ui.js').then(m => m.renderAcademicWorkspace());
     } else if (viewId === 'forest') {
       if (forestView) forestView.classList.remove('hidden');
       if (viewForestBtn) viewForestBtn.classList.add('active');
@@ -226,6 +233,9 @@ function setupGeneralUI() {
   }
   if (viewPlanBtn) {
     viewPlanBtn.addEventListener('click', () => switchMainView('today-plan'));
+  }
+  if (viewAcademicBtn) {
+    viewAcademicBtn.addEventListener('click', () => switchMainView('academic'));
   }
   if (viewForestBtn) {
     viewForestBtn.addEventListener('click', () => switchMainView('forest'));

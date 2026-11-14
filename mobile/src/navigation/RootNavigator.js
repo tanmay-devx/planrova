@@ -14,6 +14,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import NotificationCenterScreen from '../screens/NotificationCenterScreen';
 import AlarmScreen from '../screens/AlarmScreen';
 import CalculatorScreen from '../screens/CalculatorScreen';
+import AcademicScreen from '../screens/AcademicScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -106,6 +107,11 @@ export default function RootNavigator() {
         name="CalculatorWorkspace" 
         component={CalculatorScreen} 
         options={{ title: 'Study Calculator', headerShown: false }} 
+      />
+      <Stack.Screen 
+        name="AcademicWorkspace" 
+        component={AcademicScreen} 
+        options={{ title: 'Academic Workspace' }} 
       />
     </Stack.Navigator>
   );

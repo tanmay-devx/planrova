@@ -26,3 +26,6 @@ export * from './migrations/habit.migration.js';
 // Scheduling Engine
 export * from './scheduling/index.js';
 
+// Academic Domain
+export * from './academic/index.js';
+
