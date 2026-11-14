@@ -20,6 +20,7 @@ import {
   timeStringToMinutes,
   minutesToTimeString,
   calculateDurationMinutes,
+  splitCrossMidnightInterval,
   areIntervalsOverlapping,
   intersectIntervals,
   mergeIntervals,
@@ -36,6 +37,7 @@ import {
   normalizeScheduleProposal,
   validateProposalFreshness
 } from '../shared/domain/scheduling/index.js';
+import { normalizeTask, validateTask } from '../shared/domain/entities/task.schema.js';
 
 describe('Stage 2: Scheduling Types & Constants', () => {
   it('strictly sums slot suitability weights to exactly 100', () => {
@@ -162,11 +164,61 @@ describe('Stage 2: Temporal Deadline & Workload Semantics', () => {
     const specificMins = resolveDeadlineMinutes('2026-11-14', '15:30', targetDate, '18:00');
     expect(specificMins).toBe(930); // 15:30
 
-    // Past date (overdue)
-    expect(resolveDeadlineMinutes('2026-11-10', '', targetDate, '18:00')).toBe(-1);
+    // Past date (overdue by 1 day)
+    expect(resolveDeadlineMinutes('2026-11-13', '', targetDate, '18:00')).toBe(-360);
 
-    // Future date
-    expect(resolveDeadlineMinutes('2026-11-20', '', targetDate, '18:00')).toBe(Infinity);
+    // No deadline -> Infinity
+    expect(resolveDeadlineMinutes('', '', targetDate, '18:00')).toBe(Infinity);
+  });
+
+  it('ensures multi-day future deadlines are strictly chronologically comparable', () => {
+    const targetDate = '2026-11-14';
+
+    // Same day specific time (15:00)
+    const d1 = resolveDeadlineMinutes('2026-11-14', '15:00', targetDate, '18:00'); // 900
+    // Same day date-only (18:00)
+    const d2 = resolveDeadlineMinutes('2026-11-14', '', targetDate, '18:00');      // 1080
+    // Tomorrow morning (10:00)
+    const d3 = resolveDeadlineMinutes('2026-11-15', '10:00', targetDate, '18:00'); // 1440 + 600 = 2040
+    // Tomorrow date-only (18:00)
+    const d4 = resolveDeadlineMinutes('2026-11-15', '', targetDate, '18:00');      // 1440 + 1080 = 2520
+    // Day after tomorrow afternoon (14:00)
+    const d5 = resolveDeadlineMinutes('2026-11-16', '14:00', targetDate, '18:00'); // 2880 + 840 = 3720
+    // No deadline
+    const dInf = resolveDeadlineMinutes(null, null, targetDate, '18:00');           // Infinity
+
+    expect(d1).toBe(900);
+    expect(d2).toBe(1080);
+    expect(d3).toBe(2040);
+    expect(d4).toBe(2520);
+    expect(d5).toBe(3720);
+    expect(dInf).toBe(Infinity);
+
+    // Strict chronological ordering
+    expect(d1 < d2).toBe(true);
+    expect(d2 < d3).toBe(true);
+    expect(d3 < d4).toBe(true);
+    expect(d4 < d5).toBe(true);
+    expect(d5 < dInf).toBe(true);
+  });
+
+  it('splits cross-midnight intervals into two valid single-day intervals', () => {
+    import('../shared/domain/scheduling/scheduling.utils.js').then(m => {
+      const segments = m.splitCrossMidnightInterval('23:00', '02:00', '2026-11-14');
+      expect(segments).toHaveLength(2);
+      expect(segments[0]).toEqual({
+        date: '2026-11-14',
+        startTime: '23:00',
+        endTime: '24:00',
+        durationMinutes: 60
+      });
+      expect(segments[1]).toEqual({
+        date: '2026-11-15',
+        startTime: '00:00',
+        endTime: '02:00',
+        durationMinutes: 120
+      });
+    });
   });
 
   it('calculates workload utilization using flexible capacity formula', () => {
@@ -339,6 +391,83 @@ describe('Stage 2: Validation & Normalization Contracts', () => {
     const staleVersion = validateProposalFreshness(proposalOldVersion, {});
     expect(staleVersion.isFresh).toBe(false);
     expect(staleVersion.reason).toContain('differs from active version');
+
+    // Stale Case 5: Fixed calendar event modified on targetDate
+    const staleCal = validateProposalFreshness(proposal, {
+      tasks: currentTasksFresh,
+      calendarEvents: [
+        { id: 'cal_1', title: 'Midterm Exam', date: '2026-11-14', updatedAt: now + 5000 }
+      ]
+    });
+    expect(staleCal.isFresh).toBe(false);
+    expect(staleCal.reason).toContain('Fixed calendar event');
+
+    // Stale Case 6: Availability configuration updated after proposal
+    const staleAvail = validateProposalFreshness(proposal, {
+      tasks: currentTasksFresh,
+      availability: { updatedAt: now + 6000 }
+    });
+    expect(staleAvail.isFresh).toBe(false);
+    expect(staleAvail.reason).toContain('User working hours or availability preferences were updated');
+
+    // Stale Case 7: Locked block modified on targetDate
+    const staleLocked = validateProposalFreshness(proposal, {
+      tasks: currentTasksFresh,
+      lockedBlocks: [
+        { id: 'lb_1', title: 'Doctor Visit', date: '2026-11-14', updatedAt: now + 7000 }
+      ]
+    });
+    expect(staleLocked.isFresh).toBe(false);
+    expect(staleLocked.reason).toContain('Locked schedule block');
+  });
+
+  it('normalizes task with scheduledSessions without breaking flat startTime/endTime legacy compatibility', () => {
+    const rawTask = {
+      id: 't_split_1',
+      title: 'Deep Work Session',
+      estimatedMinutes: 120,
+      allowSplit: true,
+      startTime: '09:00',
+      endTime: '10:00',
+      scheduledSessions: [
+        { blockId: 'sb_t_split_1_p1', date: '2026-11-14', startTime: '09:00', endTime: '10:00', part: 1, totalParts: 2, durationMinutes: 60 },
+        { blockId: 'sb_t_split_1_p2', date: '2026-11-14', startTime: '14:00', endTime: '15:00', part: 2, totalParts: 2, durationMinutes: 60 }
+      ]
+    };
+
+    const normTask = normalizeTask(rawTask);
+    expect(normTask.allowSplit).toBe(true);
+    expect(normTask.scheduledSessions).toHaveLength(2);
+    expect(normTask.startTime).toBe('09:00'); // Legacy backward compatibility: earliest session
+    expect(normTask.endTime).toBe('10:00');
+
+    // ScheduleBlock stable ID generation for split parts
+    const block1 = normalizeScheduleBlock({
+      splitInfo: { part: 1, totalParts: 2, parentTaskId: 't_split_1' },
+      startTime: '09:00',
+      endTime: '10:00',
+      date: '2026-11-14'
+    });
+    expect(block1.id).toBe('sb_t_split_1_p1');
+    expect(block1.splitInfo.parentTaskId).toBe('t_split_1');
+
+    const block2 = normalizeScheduleBlock({
+      splitInfo: { part: 2, totalParts: 2, parentTaskId: 't_split_1' },
+      startTime: '14:00',
+      endTime: '15:00',
+      date: '2026-11-14'
+    });
+    expect(block2.id).toBe('sb_t_split_1_p2');
+  });
+
+  it('distinguishes configurable onboarding availability defaults from user-configured settings', () => {
+    // Default onboarding
+    const defaultAvail = normalizeAvailability({ userId: 'u_new' });
+    expect(defaultAvail.isUserConfigured).toBe(false);
+
+    // User-configured
+    const userAvail = normalizeAvailability({ userId: 'u_custom', isUserConfigured: true });
+    expect(userAvail.isUserConfigured).toBe(true);
   });
 });
 

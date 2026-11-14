@@ -49,6 +49,10 @@ export function validateTask(task) {
     errors.push('linkedNoteIds must be an array of string IDs');
   }
 
+  if (task.scheduledSessions && !Array.isArray(task.scheduledSessions)) {
+    errors.push('scheduledSessions must be an array of session objects');
+  }
+
   return {
     valid: errors.length === 0,
     errors
@@ -86,6 +90,9 @@ export function normalizeTask(raw = {}) {
     ? [...new Set(raw.linkedNoteIds)]
     : (Array.isArray(raw.linkedNotes) ? [...new Set(raw.linkedNotes)] : []);
 
+  const allowSplit = raw.allowSplit !== undefined ? Boolean(raw.allowSplit) : false;
+  const scheduledSessions = Array.isArray(raw.scheduledSessions) ? [...raw.scheduledSessions] : [];
+
   return {
     ...raw, // preserve legacy properties
     id,
@@ -101,6 +108,8 @@ export function normalizeTask(raw = {}) {
     startTime,
     endTime,
     estimatedMinutes: typeof raw.estimatedMinutes === 'number' ? raw.estimatedMinutes : null,
+    allowSplit,
+    scheduledSessions,
     completedAt: raw.completedAt || (status === 'completed' ? (raw.updated_at || now) : null),
     linkedNoteIds,
     createdAt: raw.createdAt || raw.created_at || now,

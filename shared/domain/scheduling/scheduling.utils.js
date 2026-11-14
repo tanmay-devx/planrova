@@ -151,37 +151,94 @@ export function subtractIntervals(baseInterval, busyIntervals = []) {
 }
 
 /**
+ * Calculates calendar day difference (dateStrB - dateStrA) in whole integer days.
+ * Pure calendar day math independent of UTC shifts or DST anomalies.
+ */
+export function getCalendarDayDifference(dateStrA, dateStrB) {
+  if (!dateStrA || !dateStrB) return 0;
+  const matchA = dateStrA.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const matchB = dateStrB.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!matchA || !matchB) return 0;
+
+  const utc1 = Date.UTC(parseInt(matchA[1], 10), parseInt(matchA[2], 10) - 1, parseInt(matchA[3], 10));
+  const utc2 = Date.UTC(parseInt(matchB[1], 10), parseInt(matchB[2], 10) - 1, parseInt(matchB[3], 10));
+  return Math.round((utc2 - utc1) / (1000 * 60 * 60 * 24));
+}
+
+/**
  * Resolves effective deadline minute for a given task relative to a target planning date.
- * - If task deadline has specific time on targetDate: returns deadline minute.
- * - If task deadline is date-only (no time specified): semantically expires at end of working day
- *   (defaultWorkingEndStr, e.g. "18:00") on that date, NOT at 00:00 midnight!
- * - If dueDate is in the past: returns negative number (overdue).
- * - If dueDate is in future: returns positive number > 1440 (sufficient time).
+ * - Future deadlines are strictly chronologically comparable: (dayDelta * 1440) + deadlineMinuteOnThatDay.
+ * - Date-only deadlines expire at end of working hours (defaultWorkingEndStr, e.g. "18:00" = 1080 min) on that day,
+ *   NOT at 00:00 midnight!
+ * - Overdue deadlines resolve to negative numbers proportional to overdue distance.
+ * - Tasks without deadlines resolve to Infinity.
  */
 export function resolveDeadlineMinutes(dueDate, deadlineTime, targetDate, defaultWorkingEndStr = '18:00') {
-  if (!dueDate) return Infinity; // No deadline
-
-  const target = dueDate.trim();
-  const current = (targetDate || '').trim();
-
-  if (target < current) {
-    // Past deadline: overdue
-    return -1;
+  if (!dueDate || typeof dueDate !== 'string' || !dueDate.trim()) {
+    return Infinity; // No deadline -> lowest urgency
   }
 
-  if (target > current) {
-    // Future date: not due today
-    return Infinity;
-  }
+  const dayDelta = getCalendarDayDifference(targetDate, dueDate.trim());
+  const workingEndMinutes = timeStringToMinutes(defaultWorkingEndStr) || 1080;
 
-  // Due on targetDate!
+  // Specific time deadline
   if (deadlineTime && typeof deadlineTime === 'string' && deadlineTime.trim()) {
-    const mins = timeStringToMinutes(deadlineTime.trim());
-    return isNaN(mins) ? timeStringToMinutes(defaultWorkingEndStr) : mins;
+    const timeMinutes = timeStringToMinutes(deadlineTime.trim());
+    const effectiveTime = isNaN(timeMinutes) ? workingEndMinutes : timeMinutes;
+    return (dayDelta * 1440) + effectiveTime;
   }
 
-  // Date-only deadline: expires at end of working hours on that day
-  return timeStringToMinutes(defaultWorkingEndStr) || 1080; // default 18:00 (1080 min)
+  // Date-only deadline: semantically expires at end of working hours on that day
+  return (dayDelta * 1440) + workingEndMinutes;
+}
+
+/**
+ * Splits intervals that cross local midnight boundaries into two valid single-day intervals.
+ * e.g., 23:00 to 02:00 on 2026-11-14 ->
+ *   [ { date: '2026-11-14', startTime: '23:00', endTime: '24:00', durationMinutes: 60 },
+ *     { date: '2026-11-15', startTime: '00:00', endTime: '02:00', durationMinutes: 120 } ]
+ */
+export function splitCrossMidnightInterval(startStr, endStr, dateStr) {
+  const start = timeStringToMinutes(startStr);
+  const end = timeStringToMinutes(endStr);
+  if (isNaN(start) || isNaN(end)) return [];
+
+  if (end > start) {
+    // Normal same-day interval
+    return [{
+      date: dateStr,
+      startTime: startStr,
+      endTime: endStr,
+      durationMinutes: end - start
+    }];
+  }
+
+  // Crosses midnight!
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const nextDayDate = new Date(Date.UTC(y, m - 1, d + 1));
+  const nextDateStr = nextDayDate.toISOString().split('T')[0];
+
+  const part1Duration = 1440 - start;
+  const part2Duration = end;
+
+  const segments = [];
+  if (part1Duration > 0) {
+    segments.push({
+      date: dateStr,
+      startTime: startStr,
+      endTime: '24:00',
+      durationMinutes: part1Duration
+    });
+  }
+  if (part2Duration > 0) {
+    segments.push({
+      date: nextDateStr,
+      startTime: '00:00',
+      endTime: endStr,
+      durationMinutes: part2Duration
+    });
+  }
+  return segments;
 }
 
 /**
@@ -225,8 +282,10 @@ export function classifyWorkload(utilization) {
 }
 
 /**
- * Generates a deterministic, collision-resistant hash string representing the input state.
- * Implements 64-bit FNV-1a with JSON canonical sorting. Zero external dependencies.
+ * Generates a deterministic, non-cryptographic hash string representing the input state.
+ * Implements 64-bit FNV-1a with JSON canonical key sorting.
+ * Sole purpose: Fast change detection to invalidate stale proposals.
+ * NOTE: Non-cryptographic; do not rely on for security or authentication.
  */
 export function generateSnapshotHash(data) {
   function canonicalize(obj) {

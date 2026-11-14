@@ -95,9 +95,19 @@ export const SLOT_SUITABILITY_WEIGHTS = Object.freeze({
 export const FRAGMENTATION_PENALTY_MAX = 25;
 
 /**
- * Default Scheduling and Availability Preferences
+ * Standard Storage Keys for Dexie kv_store and Firestore sync
+ */
+export const SCHEDULING_STORAGE_KEYS = Object.freeze({
+  PROPOSALS: 'schedule_proposals',
+  AVAILABILITY: 'user_availability',
+  SCHEDULE_BLOCKS: 'schedule_blocks'
+});
+
+/**
+ * Default Scheduling and Availability Preferences (Onboarding defaults only; not assumed to be user's actual schedule)
  */
 export const DEFAULT_SCHEDULING_PREFERENCES = Object.freeze({
+  isUserConfigured: false,
   minSessionMinutes: 25,
   maxSessionMinutes: 90,
   breakBetweenSessionsMinutes: 10,

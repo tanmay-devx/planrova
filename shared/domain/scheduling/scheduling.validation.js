@@ -70,6 +70,9 @@ export function validateAvailability(availability) {
 export function normalizeAvailability(raw = {}) {
   const userId = raw.userId || 'local';
   const timezone = raw.timezone || DEFAULT_SCHEDULING_PREFERENCES.timezone;
+  const isUserConfigured = raw.isUserConfigured !== undefined 
+    ? Boolean(raw.isUserConfigured) 
+    : false;
 
   const defaultWorkingHours = {
     start: raw.defaultWorkingHours?.start || DEFAULT_SCHEDULING_PREFERENCES.defaultWorkingHours.start,
@@ -110,6 +113,7 @@ export function normalizeAvailability(raw = {}) {
   return {
     userId,
     timezone,
+    isUserConfigured,
     defaultWorkingHours,
     weekdayRules,
     preferences,
@@ -162,7 +166,6 @@ export function validateScheduleBlock(block) {
 
 export function normalizeScheduleBlock(raw = {}) {
   const now = Date.now();
-  const id = raw.id || `sb_${now}_${Math.floor(Math.random() * 1000)}`;
   const date = raw.date || new Date().toISOString().split('T')[0];
   const startTime = raw.startTime || '09:00';
   const endTime = raw.endTime || '09:30';
@@ -173,7 +176,23 @@ export function normalizeScheduleBlock(raw = {}) {
   const isFixed = Boolean(raw.isFixed);
   const isLocked = Boolean(raw.isLocked);
   const isCompleted = Boolean(raw.isCompleted);
-  const splitInfo = raw.splitInfo || null;
+  const splitInfo = raw.splitInfo ? {
+    part: Number(raw.splitInfo.part) || 1,
+    totalParts: Number(raw.splitInfo.totalParts) || 1,
+    parentTaskId: String(raw.splitInfo.parentTaskId || sourceEntityId || '')
+  } : null;
+
+  // Stable deterministic ID generation
+  let id = raw.id;
+  if (!id) {
+    if (splitInfo && splitInfo.parentTaskId) {
+      id = `sb_${splitInfo.parentTaskId}_p${splitInfo.part}`;
+    } else if (sourceEntityId) {
+      id = `sb_${sourceEntityId}_${date}_${startTime.replace(':', '')}`;
+    } else {
+      id = `sb_${now}_${Math.floor(Math.random() * 1000)}`;
+    }
+  }
 
   const provenance = raw.provenance || {
     scheduledBy: 'user',
@@ -357,6 +376,42 @@ export function validateProposalFreshness(proposal, currentSnapshot = {}) {
             reason: `Task "${liveTask.title}" was modified after proposal was generated`
           };
         }
+      }
+    }
+  }
+
+  // Check 4: Calendar Event Drift (fixed commitments changed on target date)
+  if (Array.isArray(currentSnapshot.calendarEvents)) {
+    for (const ev of currentSnapshot.calendarEvents) {
+      if (ev && (ev.date === proposal.targetDate || ev.startDate === proposal.targetDate)) {
+        if (ev.updatedAt && ev.updatedAt > proposal.createdAt) {
+          return {
+            isFresh: false,
+            reason: `Fixed calendar event "${ev.title || 'Event'}" was modified after proposal was generated`
+          };
+        }
+      }
+    }
+  }
+
+  // Check 5: Availability Configuration Drift
+  if (currentSnapshot.availability && currentSnapshot.availability.updatedAt) {
+    if (currentSnapshot.availability.updatedAt > proposal.createdAt) {
+      return {
+        isFresh: false,
+        reason: 'User working hours or availability preferences were updated after proposal was generated'
+      };
+    }
+  }
+
+  // Check 6: Locked Schedule Blocks Drift
+  if (Array.isArray(currentSnapshot.lockedBlocks)) {
+    for (const lb of currentSnapshot.lockedBlocks) {
+      if (lb && lb.date === proposal.targetDate && lb.updatedAt && lb.updatedAt > proposal.createdAt) {
+        return {
+          isFresh: false,
+          reason: `Locked schedule block "${lb.title || 'Block'}" was modified after proposal was generated`
+        };
       }
     }
   }
