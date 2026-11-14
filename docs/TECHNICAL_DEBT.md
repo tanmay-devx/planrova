@@ -55,7 +55,20 @@ This document tracks identified architectural issues, code smells, performance b
 
 ---
 
-## 3. Debt Resolved in Phase 2
+## 3. Debt Resolved in Phase 3
+
+| Debt ID | Title | Resolution |
+| :--- | :--- | :--- |
+| **RESOLVED-P3-01** | Split-Task Competing Sources of Truth | Established canonical `Task` entity as sole owner of `scheduledSessions` array with dual-writing to `startTime`/`endTime` for backward compatibility. |
+| **RESOLVED-P3-02** | Stale Schedule Proposals Acceptance | Implemented deep multi-entity `validateProposalFreshness` validating tasks, calendar events, locked blocks, and availability immediately prior to write. |
+| **RESOLVED-P3-03** | Ambiguous Workload Utilization Formula | Established mathematically sound flexible capacity formula: $\max(0, \text{Total Working} - \text{Fixed} - \text{Breaks})$ with non-overlapping classification thresholds. |
+| **RESOLVED-P3-04** | Chronologically Incomparable Deadlines | Formulated multi-day chronological minute scale `(dayDelta * 1440) + deadlineMinutes` with date-only deadlines resolving to working day end. |
+| **RESOLVED-P3-05** | Cross-Midnight Interval Truncation | Implemented `splitCrossMidnightInterval` to partition events spanning midnight into distinct per-date intervals. |
+| **RESOLVED-P3-06** | Retroactive Past Task Allocation | Enforced elapsed time locking in adaptive rescheduling, ensuring future tasks cannot be placed in the past. |
+
+---
+
+## 4. Debt Resolved in Phase 2
 
 | Debt ID | Title | Resolution |
 | :--- | :--- | :--- |

@@ -3,7 +3,7 @@
 ```mermaid
 flowchart LR
     P1["Phase 1: Foundation & Reliability<br/>(COMPLETED)"] --> P2["Phase 2: Unified Domain & Capture<br/>(COMPLETED)"]
-    P2 --> P3["Phase 3: Adaptive Planning"]
+    P2 --> P3["Phase 3: Adaptive Planning<br/>(COMPLETED)"]
     P3 --> P4["Phase 4: Academic Workspaces"]
     P4 --> P5["Phase 5: Finance & Wellbeing"]
     P5 --> P6["Phase 6: Hybrid AI Assistance"]
@@ -43,13 +43,21 @@ flowchart LR
 
 ---
 
-## Phase 3: Adaptive Planning
-- **Focus:** Dynamic scheduling & workload intelligence.
-- **Milestones:**
-  - Conflict detection engine for overlapping lecture and study blocks.
-  - Cognitive workload scoring (estimating mental fatigue per day).
-  - Smart buffer recommendation before exam dates and assignment deadlines.
-  - Automatic task rescheduling when items are missed.
+## Phase 3: Adaptive Planning (Completed)
+- **Status:** **DONE**
+- **Focus:** Dynamic deterministic scheduling & workload intelligence.
+- **Objectives:**
+  - [x] Platform-independent deterministic scheduling algorithm in `shared/domain/scheduling/` (<0.35ms execution at 250 tasks).
+  - [x] Decoupled task ranking queue from candidate slot suitability scoring (40/30/20/10 calibrated weights).
+  - [x] Comprehensive availability engine (weekday rules, custom exceptions, timetable materialization, lunch breaks).
+  - [x] Hard & soft conflict detection engine (overlap, locked block collision, deadline violations, availability breaches).
+  - [x] Workload intelligence with flexible capacity formula, non-overlapping thresholds, cognitive load score, and fatigue risk.
+  - [x] Smart buffer generator (transition spacing, exam prep, assignment review buffers).
+  - [x] Non-destructive adaptive rescheduling engine (overrun handling, elapsed time protection, spillover, locked block freezing).
+  - [x] Dexie and Firestore synchronization with deep proposal freshness validation and single source of truth for split tasks (`Task.scheduledSessions`).
+  - [x] Web "Today Plan" timeline view, weekly capacity summary bar, and interactive "Generate Plan" action modal.
+  - [x] Mobile React Native Adaptive Planning screen and proposal modal in `ScheduleScreen.js`.
+  - [x] 100% test pass rate across 21 test suites and 144 automated tests.
 
 ---
 

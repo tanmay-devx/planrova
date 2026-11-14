@@ -9,6 +9,12 @@ import { awardXP } from '../utils/xpManager';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { callOcrProxy } from '../config/api';
+import { 
+  generateScheduleProposal, 
+  calculateWorkloadUtilization, 
+  classifyWorkload,
+  PROPOSAL_STATUSES 
+} from '../../../shared/domain/scheduling';
 
 export default function ScheduleScreen() {
   const todayStr = new Date().toLocaleDateString('en-CA');
@@ -19,6 +25,11 @@ export default function ScheduleScreen() {
   const [habits] = useFirestoreData('user_habits', []);
   const [gamification, setGamification] = useFirestoreData('gamification', { level: 1, xp: 0 });
   const [timetable] = useFirestoreData('timetable', { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] });
+  const [scheduleBlocks, setScheduleBlocks] = useFirestoreData('schedule_blocks', []);
+  const [userAvailability] = useFirestoreData('user_availability', null);
+  const [adaptivePlanDate, setAdaptivePlanDate] = useState(todayStr);
+  const [showPlanProposalModal, setShowPlanProposalModal] = useState(false);
+  const [generatedMobileProposal, setGeneratedMobileProposal] = useState(null);
   
   // Segment view control: 'weekly' or 'semester'
   const [scheduleView, setScheduleView] = useState('weekly');
@@ -616,13 +627,19 @@ export default function ScheduleScreen() {
           style={[styles.segmentBtn, scheduleView === 'weekly' && styles.segmentBtnActive]}
           onPress={() => setScheduleView('weekly')}
         >
-          <Text style={[styles.segmentBtnText, scheduleView === 'weekly' && styles.segmentBtnTextActive]}>Weekly Schedule</Text>
+          <Text style={[styles.segmentBtnText, scheduleView === 'weekly' && styles.segmentBtnTextActive]}>Weekly</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.segmentBtn, scheduleView === 'adaptive' && styles.segmentBtnActive]}
+          onPress={() => setScheduleView('adaptive')}
+        >
+          <Text style={[styles.segmentBtnText, scheduleView === 'adaptive' && styles.segmentBtnTextActive]}>Daily Plan</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.segmentBtn, scheduleView === 'semester' && styles.segmentBtnActive]}
           onPress={() => setScheduleView('semester')}
         >
-          <Text style={[styles.segmentBtnText, scheduleView === 'semester' && styles.segmentBtnTextActive]}>Semester Planner</Text>
+          <Text style={[styles.segmentBtnText, scheduleView === 'semester' && styles.segmentBtnTextActive]}>Semester</Text>
         </TouchableOpacity>
       </View>
 
@@ -699,6 +716,113 @@ export default function ScheduleScreen() {
             </View>
           </ScrollView>
         </Animated.View>
+      ) : scheduleView === 'adaptive' ? (
+        /* Daily Adaptive Planning View */
+        <ScrollView 
+          contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#C2A878']} tintColor="#C2A878" />}
+        >
+          {/* Date Selector Row */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, backgroundColor: '#181A20', padding: 12, borderRadius: 12 }}>
+            <TouchableOpacity onPress={() => {
+              const d = new Date(adaptivePlanDate);
+              d.setDate(d.getDate() - 1);
+              setAdaptivePlanDate(d.toLocaleDateString('en-CA'));
+            }}>
+              <Ionicons name="chevron-back" size={20} color="#C2A878" />
+            </TouchableOpacity>
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{adaptivePlanDate}</Text>
+              <Text style={{ color: '#888', fontSize: 11 }}>{new Date(adaptivePlanDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' })}</Text>
+            </View>
+            <TouchableOpacity onPress={() => {
+              const d = new Date(adaptivePlanDate);
+              d.setDate(d.getDate() + 1);
+              setAdaptivePlanDate(d.toLocaleDateString('en-CA'));
+            }}>
+              <Ionicons name="chevron-forward" size={20} color="#C2A878" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Action Bar with Workload Pill & Generate Button */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            {(() => {
+              const dayBlocks = (scheduleBlocks || []).filter(b => b.date === adaptivePlanDate && !b.deleted);
+              const flexMin = dayBlocks.filter(b => b.blockType === 'task').reduce((acc, b) => acc + (b.durationMinutes || 0), 0);
+              const util = calculateWorkloadUtilization(flexMin, 540, 60, 60);
+              const cls = classifyWorkload(util);
+              const pct = Math.round(util * 100);
+              const color = cls === 'overloaded' ? '#EF4444' : cls === 'heavy' ? '#F59E0B' : cls === 'balanced' ? '#3B82F6' : '#10B981';
+              return (
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: color + '22', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderColor: color + '44', borderWidth: 1 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color, marginRight: 6 }} />
+                  <Text style={{ color, fontSize: 12, fontWeight: '700', textTransform: 'capitalize' }}>{cls} ({pct}%)</Text>
+                </View>
+              );
+            })()}
+
+            <TouchableOpacity 
+              style={{ backgroundColor: '#C2A878', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center' }}
+              onPress={() => {
+                const dayTasks = (tasks || []).filter(t => !t.completed && !t.deleted);
+                const proposal = generateScheduleProposal({
+                  targetDate: adaptivePlanDate,
+                  tasks: dayTasks,
+                  timetable,
+                  userAvailability: userAvailability || {},
+                  lockedBlocks: (scheduleBlocks || []).filter(b => b.date === adaptivePlanDate && b.isLocked)
+                });
+                setGeneratedMobileProposal(proposal);
+                setShowPlanProposalModal(true);
+              }}
+            >
+              <Ionicons name="sparkles" size={14} color="#0F1115" style={{ marginRight: 6 }} />
+              <Text style={{ color: '#0F1115', fontWeight: '700', fontSize: 13 }}>Generate Plan</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Schedule Blocks Timeline */}
+          {(() => {
+            const dayBlocks = (scheduleBlocks || []).filter(b => b.date === adaptivePlanDate && !b.deleted).sort((a, b) => a.startTime.localeCompare(b.startTime));
+            if (dayBlocks.length === 0) {
+              return (
+                <View style={{ padding: 32, alignItems: 'center', backgroundColor: '#181A20', borderRadius: 16, borderWidth: 1, borderColor: '#2A2E39', borderStyle: 'dashed' }}>
+                  <Ionicons name="calendar-outline" size={40} color="#666" style={{ marginBottom: 12 }} />
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15, marginBottom: 6 }}>No Plan for this Day</Text>
+                  <Text style={{ color: '#888', fontSize: 12, textAlign: 'center', lineHeight: 18 }}>
+                    Tap 'Generate Plan' to calculate an optimized schedule respecting your timetable and deadlines.
+                  </Text>
+                </View>
+              );
+            }
+
+            return dayBlocks.map((block, idx) => (
+              <View key={block.id || idx} style={{ backgroundColor: '#181A20', padding: 14, borderRadius: 12, marginBottom: 10, borderWidth: 1, borderColor: block.blockType === 'buffer' ? '#34D39944' : '#2A2E39', flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ minWidth: 85 }}>
+                  <Text style={{ color: '#C2A878', fontWeight: '700', fontSize: 13 }}>{block.startTime}</Text>
+                  <Text style={{ color: '#888', fontSize: 11 }}>{block.endTime}</Text>
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>{block.title}</Text>
+                    <View style={{ backgroundColor: block.blockType === 'buffer' ? '#34D39922' : block.blockType === 'lecture' ? '#A78BFA22' : '#3B82F622', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                      <Text style={{ color: block.blockType === 'buffer' ? '#34D399' : block.blockType === 'lecture' ? '#A78BFA' : '#3B82F6', fontSize: 9, fontWeight: '700', textTransform: 'uppercase' }}>
+                        {block.blockType}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={{ color: '#888', fontSize: 11, marginTop: 2 }}>{block.durationMinutes} min {block.provenance?.reason ? `• ${block.provenance.reason}` : ''}</Text>
+                </View>
+                <TouchableOpacity onPress={() => {
+                  const updated = (scheduleBlocks || []).map(b => b.id === block.id ? { ...b, isLocked: !b.isLocked } : b);
+                  setScheduleBlocks(updated);
+                }}>
+                  <Ionicons name={block.isLocked ? "lock-closed" : "lock-open-outline"} size={18} color={block.isLocked ? "#C2A878" : "#666"} />
+                </TouchableOpacity>
+              </View>
+            ));
+          })()}
+        </ScrollView>
       ) : (
         /* Semester Planner View */
         <ScrollView 
@@ -1245,6 +1369,101 @@ export default function ScheduleScreen() {
             </View>
           </ScrollView>
         </View>
+        </View>
+      </Modal>
+
+      {/* Adaptive Proposal Review Modal */}
+      <Modal visible={showPlanProposalModal} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: '#181A20', borderRadius: 20, padding: 20, maxHeight: '85%', borderWidth: 1, borderColor: '#2A2E39' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 17 }}>✨ Proposed Daily Plan</Text>
+              <TouchableOpacity onPress={() => setShowPlanProposalModal(false)}>
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ marginBottom: 16 }}>
+              {generatedMobileProposal && (
+                <View>
+                  <View style={{ backgroundColor: '#111216', padding: 12, borderRadius: 10, marginBottom: 12 }}>
+                    <Text style={{ color: '#C2A878', fontWeight: '700', fontSize: 13, marginBottom: 4 }}>
+                      Workload: {generatedMobileProposal.workload.classification.toUpperCase()} ({Math.round(generatedMobileProposal.workload.capacityUtilization * 100)}%)
+                    </Text>
+                    <Text style={{ color: '#aaa', fontSize: 11, lineHeight: 16 }}>{generatedMobileProposal.workload.explanation}</Text>
+                  </View>
+
+                  <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13, marginBottom: 8 }}>Proposed Blocks ({generatedMobileProposal.proposedBlocks.length}):</Text>
+                  {generatedMobileProposal.proposedBlocks.map((b, i) => (
+                    <View key={b.id || i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#252830' }}>
+                      <Text style={{ color: '#C2A878', fontSize: 12, fontWeight: '700' }}>{b.startTime} - {b.endTime}</Text>
+                      <Text style={{ color: '#fff', fontSize: 12, flex: 1, marginLeft: 10 }} numberOfLines={1}>{b.title}</Text>
+                      <Text style={{ color: '#888', fontSize: 11 }}>{b.durationMinutes}m</Text>
+                    </View>
+                  ))}
+
+                  {generatedMobileProposal.unscheduledTasks.length > 0 && (
+                    <View style={{ marginTop: 12, backgroundColor: '#3A2E1A', padding: 10, borderRadius: 8 }}>
+                      <Text style={{ color: '#F59E0B', fontWeight: '700', fontSize: 12, marginBottom: 4 }}>Unscheduled Tasks ({generatedMobileProposal.unscheduledTasks.length}):</Text>
+                      {generatedMobileProposal.unscheduledTasks.map((u, i) => (
+                        <Text key={u.taskId || i} style={{ color: '#ddd', fontSize: 11 }}>• {u.title}: {u.reason}</Text>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity 
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#2A2E39', alignItems: 'center' }}
+                onPress={() => setShowPlanProposalModal(false)}
+              >
+                <Text style={{ color: '#fff', fontWeight: '600' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#C2A878', alignItems: 'center' }}
+                onPress={() => {
+                  if (generatedMobileProposal) {
+                    // Update canonical tasks
+                    const tasksCopy = [...(tasks || [])];
+                    const targetDate = generatedMobileProposal.targetDate;
+                    for (const b of generatedMobileProposal.proposedBlocks) {
+                      if (b.blockType === 'task' && b.sourceEntityId) {
+                        const tIdx = tasksCopy.findIndex(t => String(t.id) === String(b.sourceEntityId));
+                        if (tIdx >= 0) {
+                          const existingSessions = (tasksCopy[tIdx].scheduledSessions || []).filter(s => s.date !== targetDate);
+                          existingSessions.push({
+                            blockId: b.id,
+                            date: targetDate,
+                            startTime: b.startTime,
+                            endTime: b.endTime,
+                            durationMinutes: b.durationMinutes
+                          });
+                          tasksCopy[tIdx] = {
+                            ...tasksCopy[tIdx],
+                            scheduledSessions: existingSessions,
+                            startTime: b.startTime,
+                            endTime: b.endTime
+                          };
+                        }
+                      }
+                    }
+                    setTasks(tasksCopy);
+
+                    // Update schedule_blocks
+                    const existingOther = (scheduleBlocks || []).filter(b => b.date !== targetDate && !b.deleted);
+                    setScheduleBlocks([...existingOther, ...generatedMobileProposal.proposedBlocks]);
+
+                    setShowPlanProposalModal(false);
+                    Alert.alert('Plan Accepted', 'Your schedule has been successfully updated.');
+                  }
+                }}
+              >
+                <Text style={{ color: '#0F1115', fontWeight: '700' }}>Accept Plan</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
     </SafeAreaView>

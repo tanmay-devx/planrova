@@ -93,6 +93,7 @@ export function normalizeAvailability(raw = {}) {
     allowTaskSplitting: raw.preferences?.allowTaskSplitting !== undefined
       ? Boolean(raw.preferences.allowTaskSplitting)
       : DEFAULT_SCHEDULING_PREFERENCES.allowTaskSplitting,
+    lunchBreak: raw.preferences?.lunchBreak || raw.lunchBreak || DEFAULT_SCHEDULING_PREFERENCES.lunchBreak,
     defaultFocusSlot
   };
 
@@ -107,7 +108,24 @@ export function normalizeAvailability(raw = {}) {
     6: { active: true, start: '10:00', end: '15:00', focusSlot: { start: '10:00', end: '13:00' } } // Saturday
   };
 
-  const weekdayRules = raw.weekdayRules ? { ...defaultWeekdayRules, ...raw.weekdayRules } : defaultWeekdayRules;
+  const dayNameToIndex = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+  const rawWeekdayInput = raw.weekdayRules || raw.workingHours || {};
+  const normalizedWeekdayRules = { ...defaultWeekdayRules };
+
+  for (const [key, val] of Object.entries(rawWeekdayInput)) {
+    if (!val || typeof val !== 'object') continue;
+    const lowerKey = String(key).toLowerCase();
+    const idx = dayNameToIndex[lowerKey] !== undefined ? dayNameToIndex[lowerKey] : Number(key);
+    if (!isNaN(idx) && idx >= 0 && idx <= 6) {
+      normalizedWeekdayRules[idx] = {
+        active: val.active !== undefined ? Boolean(val.active) : true,
+        start: val.start || defaultWorkingHours.start,
+        end: val.end || defaultWorkingHours.end,
+        focusSlot: val.focusSlot || defaultFocusSlot
+      };
+    }
+  }
+
   const customExceptions = Array.isArray(raw.customExceptions) ? [...raw.customExceptions] : [];
 
   return {
@@ -115,7 +133,7 @@ export function normalizeAvailability(raw = {}) {
     timezone,
     isUserConfigured,
     defaultWorkingHours,
-    weekdayRules,
+    weekdayRules: normalizedWeekdayRules,
     preferences,
     customExceptions,
     schemaVersion: 1
@@ -302,6 +320,7 @@ export function normalizeScheduleProposal(raw = {}) {
     workload,
     conflicts,
     buffers,
+    changeSummary: raw.changeSummary || null,
     createdAt: raw.createdAt || now,
     updatedAt: raw.updatedAt || now,
     schemaVersion: 1

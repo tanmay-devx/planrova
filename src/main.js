@@ -25,6 +25,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { COLORS, TYPOGRAPHY, BORDER_RADIUS } from './utils/tokens.js';
 import { initCommandPalette } from './modules/command-palette.js';
 import { initQuickCaptureUI } from './modules/quick-capture/capture-ui.js';
+import { initAdaptivePlanningUI, renderTodayPlan } from './modules/adaptive-planning/planning-ui.js';
 
 function injectCSSVariables() {
   const root = document.documentElement;
@@ -88,6 +89,7 @@ function runInit() {
   safeInit('Notes', initNotes);
   safeInit('CommandPalette', initCommandPalette);
   safeInit('QuickCapture', initQuickCaptureUI);
+  safeInit('AdaptivePlanning', initAdaptivePlanningUI);
 
   // 3. Setup General Layout Triggers & Navigation switches
   safeInit('GeneralUI', setupGeneralUI);
@@ -166,24 +168,27 @@ function setupGeneralUI() {
     });
   }
 
-  // View switches (Weekly Timetable vs Dedicated Month Calendar vs Focus Forest vs Social Studypool)
+  // View switches (Weekly Timetable vs Dedicated Month Calendar vs Focus Forest vs Social Studypool vs Today Plan)
   const viewWeeklyBtn = document.getElementById('view-weekly-btn');
   const viewCalendarBtn = document.getElementById('view-calendar-btn');
+  const viewPlanBtn = document.getElementById('view-plan-btn');
   const viewForestBtn = document.getElementById('sidebar-nav-forest');
   const viewStudypoolBtn = document.getElementById('sidebar-nav-studypool');
   
   const weeklyGrid = document.getElementById('weekly-grid-view');
   const monthlyCalendar = document.getElementById('monthly-calendar-view');
+  const todayPlanView = document.getElementById('today-plan-view');
   const forestView = document.getElementById('forest-garden-view');
   const studypoolView = document.getElementById('studypool-view');
 
   function switchMainView(viewId) {
     if (weeklyGrid) weeklyGrid.classList.add('hidden');
     if (monthlyCalendar) monthlyCalendar.classList.add('hidden');
+    if (todayPlanView) todayPlanView.classList.add('hidden');
     if (forestView) forestView.classList.add('hidden');
     if (studypoolView) studypoolView.classList.add('hidden');
 
-    [viewWeeklyBtn, viewCalendarBtn, viewForestBtn, viewStudypoolBtn].forEach(btn => {
+    [viewWeeklyBtn, viewCalendarBtn, viewPlanBtn, viewForestBtn, viewStudypoolBtn].forEach(btn => {
       if (btn) btn.classList.remove('active');
     });
 
@@ -195,6 +200,10 @@ function setupGeneralUI() {
       if (monthlyCalendar) monthlyCalendar.classList.remove('hidden');
       if (viewCalendarBtn) viewCalendarBtn.classList.add('active');
       renderMonthlyCalendar();
+    } else if (viewId === 'today-plan' || viewId === 'plan') {
+      if (todayPlanView) todayPlanView.classList.remove('hidden');
+      if (viewPlanBtn) viewPlanBtn.classList.add('active');
+      renderTodayPlan();
     } else if (viewId === 'forest') {
       if (forestView) forestView.classList.remove('hidden');
       if (viewForestBtn) viewForestBtn.classList.add('active');
@@ -214,6 +223,9 @@ function setupGeneralUI() {
   }
   if (viewCalendarBtn) {
     viewCalendarBtn.addEventListener('click', () => switchMainView('calendar'));
+  }
+  if (viewPlanBtn) {
+    viewPlanBtn.addEventListener('click', () => switchMainView('today-plan'));
   }
   if (viewForestBtn) {
     viewForestBtn.addEventListener('click', () => switchMainView('forest'));

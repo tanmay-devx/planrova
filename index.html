@@ -188,6 +188,10 @@
             <span class="nav-icon" style="display: flex; align-items: center; justify-content: center;"><svg class="nav-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg></span>
             <span class="nav-text">Month Calendar</span>
           </button>
+          <button class="nav-item" id="view-plan-btn" style="text-align: left; padding: 10px 14px; display:flex; align-items:center; gap:10px; font-size:13px; font-weight:500; border-radius:8px;">
+            <span class="nav-icon" style="display: flex; align-items: center; justify-content: center;"><svg class="nav-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+            <span class="nav-text">Today's Plan</span>
+          </button>
           <button class="nav-item" id="sidebar-nav-notes" style="text-align: left; padding: 10px 14px; display:flex; align-items:center; gap:10px; font-size:13px; font-weight:500; border-radius:8px;">
             <span class="nav-icon" style="display: flex; align-items: center; justify-content: center;"><svg class="nav-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></span>
             <span class="nav-text">Subject Notes</span>
@@ -357,6 +361,44 @@
           <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
         </div>
         <div class="calendar-month-grid" id="calendar-month-grid"></div>
+      </div>
+
+      <!-- Dedicated Adaptive Planning page view -->
+      <div class="today-plan-container hidden" id="today-plan-view" style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+        <!-- Header Controls -->
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div class="week-nav" style="display:flex; align-items:center; gap:6px;">
+              <button class="nav-btn" id="plan-prev-day-btn">‹</button>
+              <h2 id="plan-current-date-label" style="font-size:16px; font-weight:700; color:#fff; margin:0; min-width:180px; text-align:center;">Today</h2>
+              <button class="nav-btn" id="plan-next-day-btn">›</button>
+            </div>
+            <button class="btn-primary-sm" id="plan-today-btn" style="padding:4px 10px; border-radius:6px; font-size:11px;">Today</button>
+            <input type="date" id="plan-date-picker" style="background:rgba(255,255,255,0.05); border:1px solid var(--border-color); color:#fff; border-radius:6px; padding:4px 8px; font-size:12px;" />
+          </div>
+
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div id="plan-workload-pill"></div>
+            <button class="btn-primary" id="plan-generate-btn" style="border-radius:20px; font-weight:700; display:flex; align-items:center; gap:6px; padding:8px 18px;">
+              ✨ Generate Plan
+            </button>
+            <button class="icon-btn" id="plan-availability-btn" title="Availability & Settings" style="font-size:16px;">
+              ⚙️
+            </button>
+          </div>
+        </div>
+
+        <!-- Weekly Capacity Overview Bar -->
+        <div style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:14px 18px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <span style="font-size:12px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Weekly Workload Capacity</span>
+            <span style="font-size:11px; color:var(--text-secondary);">Click day to view timeline</span>
+          </div>
+          <div id="plan-weekly-capacity-bar"></div>
+        </div>
+
+        <!-- Interactive Schedule Timeline -->
+        <div id="plan-timeline-container"></div>
       </div>
 
       <!-- Dedicated Focus Forest page view -->
@@ -1607,6 +1649,86 @@
         <div style="display:flex; justify-content:space-between; font-size:13px; color:var(--text-primary);">
           <span>Close Modal / Drawer</span><kbd style="background:rgba(255,255,255,0.08); padding:3px 6px; border-radius:4px; font-size:10px; color:#fff;">Esc</kbd>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GENERATE PLAN MODAL -->
+  <div id="generate-plan-modal-overlay" class="modal-overlay hidden" style="background: rgba(0,0,0,0.85); backdrop-filter: blur(16px); z-index: 1600;">
+    <div style="width: 100%; max-width: 600px; background: #141318; border: 1px solid var(--border-color); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 16px; max-height: 90vh; overflow-y: auto;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 12px;">
+        <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: #fff;">✨ Adaptive Daily Planning Engine</h3>
+        <button class="modal-close" id="plan-modal-close-btn" style="font-size: 24px; background: none; border: none; color: #fff; cursor: pointer;">×</button>
+      </div>
+
+      <!-- Parameters row -->
+      <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label style="font-size: 12px; color: var(--text-secondary);">Date:</label>
+          <input type="date" id="plan-modal-target-date" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: #fff; border-radius: 6px; padding: 4px 8px; font-size: 12px;" />
+        </div>
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); cursor: pointer;">
+          <input type="checkbox" id="plan-modal-allow-split" checked />
+          Allow long task splitting
+        </label>
+        <button class="btn-primary-sm" id="plan-modal-recompute-btn" style="margin-left: auto; border-radius: 6px; padding: 6px 12px;">
+          Re-calculate
+        </button>
+      </div>
+
+      <!-- Proposal Preview Content -->
+      <div id="plan-proposal-preview-content"></div>
+
+      <!-- Action Buttons -->
+      <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px;">
+        <button class="btn-secondary" id="plan-modal-cancel-btn" onclick="document.getElementById('generate-plan-modal-overlay').classList.add('hidden')" style="padding: 8px 16px; border-radius: 8px;">Cancel</button>
+        <button class="btn-secondary" id="plan-modal-accept-selected-btn" style="padding: 8px 16px; border-radius: 8px;">Accept Selected</button>
+        <button class="btn-primary" id="plan-modal-accept-all-btn" style="padding: 8px 20px; border-radius: 8px; font-weight: 700;">Accept All</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AVAILABILITY SETTINGS MODAL -->
+  <div id="availability-settings-modal-overlay" class="modal-overlay hidden" style="background: rgba(0,0,0,0.85); backdrop-filter: blur(16px); z-index: 1600;">
+    <div style="width: 100%; max-width: 480px; background: #141318; border: 1px solid var(--border-color); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 12px;">
+        <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: #fff;">⚙️ Working Hours & Availability</h3>
+        <button class="modal-close" id="plan-avail-close-btn" style="font-size: 24px; background: none; border: none; color: #fff; cursor: pointer;">×</button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div>
+          <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 6px;">Daily Working Hours</label>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="time" id="avail-work-start" value="09:00" style="flex: 1; padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 6px; color: #fff;" />
+            <span style="color: var(--text-secondary);">to</span>
+            <input type="time" id="avail-work-end" value="18:00" style="flex: 1; padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 6px; color: #fff;" />
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 6px;">Preferred Deep Focus Hours</label>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="time" id="avail-focus-start" value="10:00" style="flex: 1; padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 6px; color: #fff;" />
+            <span style="color: var(--text-secondary);">to</span>
+            <input type="time" id="avail-focus-end" value="12:00" style="flex: 1; padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 6px; color: #fff;" />
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 6px;">Minimum Task Session Duration</label>
+          <input type="number" id="avail-min-session" value="30" min="15" max="120" step="5" style="width: 100%; padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 6px; color: #fff;" />
+        </div>
+
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #fff; cursor: pointer;">
+          <input type="checkbox" id="avail-lunch-enabled" checked />
+          Reserve Lunch Break (13:00 – 14:00)
+        </label>
+      </div>
+
+      <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px;">
+        <button class="btn-secondary" onclick="document.getElementById('availability-settings-modal-overlay').classList.add('hidden')" style="padding: 8px 16px; border-radius: 8px;">Cancel</button>
+        <button class="btn-primary" id="plan-avail-save-btn" style="padding: 8px 20px; border-radius: 8px; font-weight: 700;">Save Preferences</button>
       </div>
     </div>
   </div>
