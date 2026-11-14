@@ -8,7 +8,7 @@ import {
   sendPasswordResetEmail
 } from 'firebase/auth';
 import { startRealtimeSync, stopRealtimeSync, syncPendingChanges } from '../db/syncEngine.js';
-import { getStorageItem, clearMemoryCache, setCurrentUserId, preloadCache } from '../utils/storage.js';
+import { getStorageItem, clearMemoryCache, setCurrentUserId, preloadCache, migrateLocalRecordsToUser } from '../utils/storage.js';
 import { localDB } from '../db/database.js';
 
 function triggerWelcomeAnimation() {
@@ -164,8 +164,10 @@ export function initAuth() {
       authModal.classList.add('hidden');
       if (closeBtn) closeBtn.style.display = '';
       
-      // Set active user scope in storage
+      // Set active user scope in storage and migrate any pending local records
       setCurrentUserId(user.uid);
+      await migrateLocalRecordsToUser(user.uid);
+      await preloadCache(user.uid);
 
       // Start Background Sync Engine!
       startRealtimeSync();
@@ -178,6 +180,7 @@ export function initAuth() {
       stopRealtimeSync();
       clearMemoryCache();
       setCurrentUserId('local');
+      await preloadCache('local');
 
       const statusDot = '<span class="auth-dot" style="width: 6px; height: 6px; background: var(--text-muted); border-radius: 50%; display: inline-block; margin-right: 4px;"></span>';
       authBtn.innerHTML = statusDot + 'Off';

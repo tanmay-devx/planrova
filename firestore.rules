@@ -28,18 +28,32 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create, update: if isOwner(userId) 
         && request.resource.data.uid == userId
-        && request.resource.data.email is string;
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 254
+        && request.resource.data.email.matches('.*@.*');
       allow delete: if isOwner(userId);
     }
 
     // ── 3. Studypool Collaborative Rooms ──────────────────────────────
     match /studypool_rooms/{roomId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      // Allow authenticated users to create rooms with reasonable name length
+      allow create: if isAuthenticated() 
+        && request.resource.data.name is string 
+        && request.resource.data.name.size() <= 100;
+      // Allow participants to update room state (join/leave/status)
+      allow update: if isAuthenticated();
+      // Prevent arbitrary room deletion; only host/creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        resource.data.hostId == request.auth.uid
+      );
 
       match /messages/{messageId} {
         allow read: if isAuthenticated();
+        // Prevent message spoofing: author UID must match authenticated caller
         allow create: if isAuthenticated()
+          && request.resource.data.uid == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() <= 1000;
         allow update, delete: if isAuthenticated() && request.auth.uid == resource.data.uid;

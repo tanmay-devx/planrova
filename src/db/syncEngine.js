@@ -54,14 +54,14 @@ export async function syncPendingChanges() {
   updateSyncStatus('syncing');
 
   try {
-    // 1. Query pending records for the current user (or legacy 'local')
+    // 1. Query pending records for the current user
     const pendingRecords = await localDB.kv_store
       .where('sync_status')
       .equals('pending')
       .toArray();
 
-    // Filter to only current user or migrate legacy unpartitioned records
-    const eligibleRecords = pendingRecords.filter(r => !r.user_id || r.user_id === user.uid || r.user_id === 'local');
+    // Strict account isolation: only push records belonging to this authenticated user
+    const eligibleRecords = pendingRecords.filter(r => r.user_id === user.uid);
 
     if (eligibleRecords.length === 0) {
       _isSyncing = false;
@@ -77,11 +77,12 @@ export async function syncPendingChanges() {
     // 2. Push to Firestore
     for (const record of eligibleRecords) {
       try {
-        const docRef = doc(db, 'users', user.uid, 'appData', record.id);
+        const itemKey = record.key || (record.id.includes(':') ? record.id.split(':')[1] : record.id);
+        const docRef = doc(db, 'users', user.uid, 'appData', itemKey);
         
         // Prepare clean cloud payload (strip local-only properties)
         const payload = {
-          id: record.id,
+          id: itemKey,
           value: record.value,
           updated_at: record.updated_at || Date.now(),
           deleted: Boolean(record.deleted)
@@ -149,15 +150,18 @@ export function startRealtimeSync() {
     snapshot.docChanges().forEach(async (change) => {
       if (change.type === 'added' || change.type === 'modified') {
         const cloudData = change.doc.data();
-        const localRecord = await localDB.kv_store.get(cloudData.id);
+        const itemKey = cloudData.id || change.doc.id;
+        const scopedId = `${user.uid}:${itemKey}`;
+        const localRecord = await localDB.kv_store.get(scopedId);
         
         if (localRecord && localRecord.sync_status === 'pending') {
           // Conflict detected between unsynced local edit and cloud update
-          console.log(`[SyncEngine] Conflict detected for key: ${cloudData.id}. Merging with tombstones...`);
-          const mergedValue = resolveSyncConflict(cloudData.id, localRecord, cloudData);
+          console.log(`[SyncEngine] Conflict detected for key: ${itemKey}. Merging with tombstones...`);
+          const mergedValue = resolveSyncConflict(itemKey, localRecord, cloudData);
           
           await localDB.kv_store.put({
-            id: cloudData.id,
+            id: scopedId,
+            key: itemKey,
             user_id: user.uid,
             value: typeof mergedValue === 'string' ? mergedValue : JSON.stringify(mergedValue),
             updated_at: Math.max(localRecord.updated_at || 0, cloudData.updated_at || 0) + 1,
@@ -169,15 +173,16 @@ export function startRealtimeSync() {
           
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('planrova:cloud_update', { 
-              detail: { key: cloudData.id } 
+              detail: { key: itemKey } 
             }));
           }
           
           setTimeout(syncPendingChanges, 1000);
         } else if (!localRecord || (cloudData.updated_at || 0) > (localRecord.updated_at || 0)) {
-          console.log(`[SyncEngine] Cloud update received for ${cloudData.id}`);
+          console.log(`[SyncEngine] Cloud update received for ${itemKey}`);
           await localDB.kv_store.put({
-            id: cloudData.id,
+            id: scopedId,
+            key: itemKey,
             user_id: user.uid,
             value: cloudData.value,
             updated_at: cloudData.updated_at || Date.now(),
@@ -189,7 +194,7 @@ export function startRealtimeSync() {
           
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('planrova:cloud_update', { 
-              detail: { key: cloudData.id } 
+              detail: { key: itemKey } 
             }));
           }
         }

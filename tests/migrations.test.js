@@ -11,7 +11,8 @@ describe('Database Schema & Sync Record Generation', () => {
   it('creates sync records with user scoping, retry counter and metadata', () => {
     const record = createSyncRecord('tasks', [{ id: 't1', title: 'Test Task' }], 'usr_123');
 
-    expect(record.id).toBe('tasks');
+    expect(record.id).toBe('usr_123:tasks');
+    expect(record.key).toBe('tasks');
     expect(record.user_id).toBe('usr_123');
     expect(record.sync_status).toBe('pending');
     expect(record.retry_count).toBe(0);
@@ -23,6 +24,8 @@ describe('Database Schema & Sync Record Generation', () => {
 
   it('defaults to local user scope when no user is provided', () => {
     const record = createSyncRecord('gamification', { level: 1, xp: 0 });
+    expect(record.id).toBe('local:gamification');
+    expect(record.key).toBe('gamification');
     expect(record.user_id).toBe('local');
   });
 });

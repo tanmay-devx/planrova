@@ -27,8 +27,13 @@ function renderHabitsList(habits, logs) {
   const todayStr = getTodayString();
   
   habits.forEach((habit) => {
-    const isCompletedToday = logs[habit.id] && logs[habit.id].includes(todayStr);
-    const currentStreak = typeof habit.streak === 'number' && !isNaN(habit.streak) ? habit.streak : 0;
+    // Cross-platform compatibility: check both habit_logs map and habit.logs array
+    const habitLogs = (logs[habit.id] || []).concat(Array.isArray(habit.logs) ? habit.logs : []);
+    const isCompletedToday = habitLogs.includes(todayStr);
+    
+    // Cross-platform compatibility: check both streak and fire
+    const rawStreak = typeof habit.streak === 'number' ? habit.streak : (typeof habit.fire === 'number' ? habit.fire : 0);
+    const currentStreak = !isNaN(rawStreak) ? rawStreak : 0;
     
     const row = document.createElement('div');
     row.className = 'habit-row';
@@ -54,16 +59,29 @@ function renderHabitsList(habits, logs) {
       const isChecked = box.classList.toggle('checked');
       
       if (!logs[id]) logs[id] = [];
+      if (!Array.isArray(habits[index].logs)) habits[index].logs = [];
       
+      const rawCurrent = typeof habits[index].streak === 'number' ? habits[index].streak : (typeof habits[index].fire === 'number' ? habits[index].fire : 0);
+      const currentStreak = !isNaN(rawCurrent) ? rawCurrent : 0;
+
       if (isChecked) {
-        logs[id].push(todayStr);
-        habits[index].streak = (typeof habits[index].streak === 'number' && !isNaN(habits[index].streak) ? habits[index].streak : 0) + 1;
+        if (!logs[id].includes(todayStr)) logs[id].push(todayStr);
+        if (!habits[index].logs.includes(todayStr)) habits[index].logs.push(todayStr);
+        
+        const nextStreak = currentStreak + 1;
+        habits[index].streak = nextStreak;
+        habits[index].fire = nextStreak;
+
         addXP(15);
         logDailyActivity('task');
         addCoins(5);
       } else {
         logs[id] = logs[id].filter(d => d !== todayStr);
-        habits[index].streak = Math.max(0, (typeof habits[index].streak === 'number' && !isNaN(habits[index].streak) ? habits[index].streak : 0) - 1);
+        habits[index].logs = habits[index].logs.filter(d => d !== todayStr);
+        
+        const nextStreak = Math.max(0, currentStreak - 1);
+        habits[index].streak = nextStreak;
+        habits[index].fire = nextStreak;
       }
       
       setStorageItem(HABITS_KEY, habits);
@@ -83,7 +101,9 @@ function setupHabitsEvents(habits, logs) {
     const newHabit = {
       id: 'h_' + Date.now(),
       name,
-      streak: 0
+      streak: 0,
+      fire: 0,
+      logs: []
     };
     
     habits.push(newHabit);
