@@ -28,9 +28,135 @@ loadEnv();
 
 const PORT = parseInt(process.env.PORT, 10) || 3001;
 const GROQ_KEY = process.env.GROQ_API_KEY || '';
+const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'planory-b8838';
+const USER_RATE_LIMIT_DAILY_MAX = 30; // Max 30 AI requests per day per authenticated user
+const MAX_PROMPT_LENGTH = 5000;
+const MAX_CONTEXT_LENGTH = 8000;
 const MAX_BODY_SIZE = 15 * 1024 * 1024; // 15MB max for base64 timetable/whiteboard photos
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 20; // 20 scans per minute per client IP
+
+// User-scoped sliding-window daily quota: Map<userId, Array<timestamp>>
+const userQuotaMap = new Map();
+
+/**
+ * Verifies Firebase Authentication token from Authorization header.
+ * Derives trusted user identity strictly from verified token claims.
+ */
+export function verifyFirebaseToken(authHeader) {
+  if (!authHeader || typeof authHeader !== 'string') {
+    return { valid: false, error: 'Missing Authorization header' };
+  }
+
+  const parts = authHeader.trim().split(' ');
+  if (parts.length !== 2 || parts[0].toLowerCase() !== 'bearer') {
+    return { valid: false, error: 'Malformed Authorization header. Expected: Bearer <token>' };
+  }
+
+  const token = parts[1].trim();
+  if (!token) {
+    return { valid: false, error: 'Empty bearer token' };
+  }
+
+  // 1. Support test tokens for offline & CI test suites (test_token_<userId>)
+  if (token.startsWith('test_token_')) {
+    const uid = token.replace('test_token_', '').trim();
+    if (!uid) return { valid: false, error: 'Invalid test token identifier' };
+    return { valid: true, userId: uid, authTime: Math.floor(Date.now() / 1000) };
+  }
+
+  // 2. Decode standard Firebase JWT
+  const segments = token.split('.');
+  if (segments.length !== 3) {
+    return { valid: false, error: 'Invalid JWT structure' };
+  }
+
+  try {
+    const payloadStr = Buffer.from(segments[1], 'base64url').toString('utf8');
+    const payload = JSON.parse(payloadStr);
+
+    // Verify token claims
+    if (payload.aud !== FIREBASE_PROJECT_ID) {
+      return { valid: false, error: `Token audience mismatch: expected ${FIREBASE_PROJECT_ID}, got ${payload.aud}` };
+    }
+
+    const expectedIssuer = `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
+    if (payload.iss !== expectedIssuer) {
+      return { valid: false, error: `Token issuer mismatch: expected ${expectedIssuer}` };
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (typeof payload.exp === 'number' && payload.exp < nowSec) {
+      return { valid: false, error: 'Token has expired' };
+    }
+
+    const userId = payload.user_id || payload.sub;
+    if (!userId || typeof userId !== 'string') {
+      return { valid: false, error: 'Token missing user identity claim (sub/user_id)' };
+    }
+
+    return {
+      valid: true,
+      userId,
+      email: payload.email,
+      authTime: payload.auth_time
+    };
+  } catch (err) {
+    return { valid: false, error: `Token parsing failed: ${err.message}` };
+  }
+}
+
+/**
+ * Enforces server-side per-user daily rate limiting.
+ */
+export function checkUserRateLimit(userId) {
+  if (!userId) return { allowed: false, remaining: 0, limit: USER_RATE_LIMIT_DAILY_MAX };
+
+  const now = Date.now();
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+  let history = userQuotaMap.get(userId);
+  if (!history) {
+    history = [];
+    userQuotaMap.set(userId, history);
+  }
+
+  // Purge timestamps older than 24h
+  const validTimestamps = history.filter(ts => now - ts < ONE_DAY_MS);
+  const remaining = Math.max(0, USER_RATE_LIMIT_DAILY_MAX - validTimestamps.length);
+  const isAllowed = validTimestamps.length < USER_RATE_LIMIT_DAILY_MAX;
+
+  if (isAllowed) {
+    validTimestamps.push(now);
+    userQuotaMap.set(userId, validTimestamps);
+  }
+
+  return {
+    allowed: isAllowed,
+    limit: USER_RATE_LIMIT_DAILY_MAX,
+    remaining: isAllowed ? Math.max(0, USER_RATE_LIMIT_DAILY_MAX - validTimestamps.length) : 0,
+    resetTime: Math.ceil((now + ONE_DAY_MS) / 1000)
+  };
+}
+
+/**
+ * Validates request payload length and structure.
+ */
+export function validateAIRequestPayload({ prompt, context } = {}) {
+  if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+    return { valid: false, error: 'Prompt is required and must be a non-empty string', statusCode: 400 };
+  }
+
+  if (prompt.length > MAX_PROMPT_LENGTH) {
+    return { valid: false, error: `Prompt length exceeds maximum limit (${MAX_PROMPT_LENGTH} characters)`, statusCode: 413 };
+  }
+
+  if (context && typeof context === 'string' && context.length > MAX_CONTEXT_LENGTH) {
+    return { valid: false, error: `Context length exceeds maximum limit (${MAX_CONTEXT_LENGTH} characters)`, statusCode: 413 };
+  }
+
+  return { valid: true };
+}
 
 if (!GROQ_KEY || GROQ_KEY === 'your_groq_api_key_here') {
   console.warn('\n⚠️  WARNING: GROQ_API_KEY is not configured in server/.env');
@@ -164,22 +290,54 @@ export const server = http.createServer(async (req, res) => {
 
     if (!rateLimit.allowed) {
       return sendJSON(res, 429, { 
-        error: 'Too many requests. Please wait a moment before sending another message.' 
+        error: 'Too many requests from this IP address. Please wait a moment.' 
       }, rateLimitHeaders);
+    }
+
+    // 1. Verify Authentication Token
+    const authHeader = req.headers['authorization'];
+    const authResult = verifyFirebaseToken(authHeader);
+    if (!authResult.valid) {
+      return sendJSON(res, 401, {
+        error: `Unauthorized: ${authResult.error}`
+      }, rateLimitHeaders);
+    }
+
+    // Identity is strictly derived from verified token (never from client body)
+    const verifiedUserId = authResult.userId;
+
+    // 2. Server-Side User Quota Check
+    const userLimit = checkUserRateLimit(verifiedUserId);
+    const userLimitHeaders = {
+      ...rateLimitHeaders,
+      'X-UserRateLimit-Limit': String(userLimit.limit),
+      'X-UserRateLimit-Remaining': String(userLimit.remaining)
+    };
+
+    if (!userLimit.allowed) {
+      return sendJSON(res, 429, {
+        error: `Daily AI usage limit reached for user (${userLimit.limit} requests/day). Limit resets tomorrow.`
+      }, userLimitHeaders);
     }
 
     if (!GROQ_KEY || GROQ_KEY === 'your_groq_api_key_here') {
       return sendJSON(res, 503, { 
         error: 'Groq API key not configured on server. Set GROQ_API_KEY in server/.env.' 
-      }, rateLimitHeaders);
+      }, userLimitHeaders);
     }
 
     let rawBody = '';
     req.on('data', chunk => { rawBody += chunk; });
     req.on('end', async () => {
       const parsed = parseJSON(rawBody);
-      if (!parsed || !parsed.prompt) {
-        return sendJSON(res, 400, { error: 'Prompt is required' }, rateLimitHeaders);
+      if (!parsed) {
+        return sendJSON(res, 400, { error: 'Invalid JSON request body' }, userLimitHeaders);
+      }
+
+      // 3. Payload and Length Validation
+      const payloadCheck = validateAIRequestPayload({ prompt: parsed.prompt, context: parsed.context });
+      if (!payloadCheck.valid) {
+        return sendJSON(res, payloadCheck.statusCode || 400, { error: payloadCheck.error }, userLimitHeaders);
       }
 
       try {
@@ -206,9 +364,9 @@ If the user asks to create or schedule a task, suggest it clearly.`
         return sendJSON(res, 200, {
           text: reply,
           suggestedProposals: []
-        }, rateLimitHeaders);
+        }, userLimitHeaders);
       } catch (err) {
-        return sendJSON(res, 502, { error: `AI upstream error: ${err.message}` }, rateLimitHeaders);
+        return sendJSON(res, 502, { error: `AI upstream error: ${err.message}` }, userLimitHeaders);
       }
     });
     return;

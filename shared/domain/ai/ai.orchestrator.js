@@ -155,9 +155,14 @@ export async function processAIQuery({
  */
 export async function approveAndExecuteProposal({
   proposal,
+  expectedUserId = null,
   domainHandlers = {}
 } = {}) {
   if (!proposal) throw new Error('Proposal required');
+
+  if (expectedUserId && proposal.userId && proposal.userId !== expectedUserId) {
+    throw new Error(`Proposal ownership mismatch: caller is ${expectedUserId} but proposal belongs to ${proposal.userId}`);
+  }
 
   if (proposal.approvalStatus === AI_PROPOSAL_STATUSES.EXECUTED) {
     return { executed: false, alreadyExecuted: true, proposal };
@@ -178,7 +183,7 @@ export async function approveAndExecuteProposal({
     throw new Error(policyCheck.reason);
   }
 
-  const val = validateProposal(approvedProposal);
+  const val = validateProposal(approvedProposal, expectedUserId);
   if (!val.valid) {
     throw new Error(`Proposal validation failed: ${val.errors.join(', ')}`);
   }

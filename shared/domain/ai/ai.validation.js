@@ -5,7 +5,7 @@
 
 import { AI_ACTION_TYPES, AI_PROPOSAL_STATUSES } from './ai.types.js';
 
-export function validateProposal(proposal) {
+export function validateProposal(proposal, expectedUserId = null) {
   const errors = [];
 
   if (!proposal || typeof proposal !== 'object') {
@@ -14,6 +14,10 @@ export function validateProposal(proposal) {
 
   if (!proposal.id) {
     errors.push('Proposal id is required');
+  }
+
+  if (expectedUserId && proposal.userId && proposal.userId !== expectedUserId) {
+    errors.push(`Proposal ownership mismatch: caller is ${expectedUserId} but proposal belongs to ${proposal.userId}`);
   }
 
   if (!Object.values(AI_ACTION_TYPES).includes(proposal.actionType)) {

@@ -96,10 +96,15 @@ export class MockAIProvider extends BaseAIProvider {
  * Routes inference requests to server/proxy.js to protect API credentials.
  */
 export class BackendAIProxyProvider extends BaseAIProvider {
-  constructor({ proxyUrl = 'http://localhost:3001/api/ai/chat', fallbackProvider = new MockAIProvider() } = {}) {
+  constructor({ 
+    proxyUrl = 'http://localhost:3001/api/ai/chat', 
+    fallbackProvider = new MockAIProvider(),
+    getAuthToken = null
+  } = {}) {
     super();
     this.proxyUrl = proxyUrl;
     this.fallbackProvider = fallbackProvider;
+    this.getAuthToken = getAuthToken;
   }
 
   async checkAvailability() {
@@ -113,20 +118,34 @@ export class BackendAIProxyProvider extends BaseAIProvider {
     }
   }
 
-  async generateResponse({ prompt, context, intent }) {
+  async generateResponse({ prompt, context, intent, authToken = null }) {
     try {
       if (typeof fetch === 'undefined') {
         return this.fallbackProvider.generateResponse({ prompt, context, intent });
       }
 
+      let token = authToken;
+      if (!token && typeof this.getAuthToken === 'function') {
+        try {
+          token = await this.getAuthToken();
+        } catch {
+          token = null;
+        }
+      }
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch(this.proxyUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ prompt, context, intent })
       });
 
       if (!res.ok) {
-        // Fallback gracefully on 503 or network error
+        // Fallback gracefully on 401, 429, 503 or server error
         return this.fallbackProvider.generateResponse({ prompt, context, intent });
       }
 

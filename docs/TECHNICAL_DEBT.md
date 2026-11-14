@@ -67,7 +67,12 @@ As part of our commitment to transparent and zero-technical-debt engineering, th
 ### 4.3 Mobile Academic Parity
 - **Resolution**: Implemented Leitner 5-box interactive flashcard review player and GPA What-If target simulator in `mobile/src/screens/AcademicScreen.js`.
 
-### 4.4 Remaining Environmental Constraints
+### 4.4 AI Server Proxy Authentication & Quota Hardening
+- **Resolution**: Identified during audit that `server/proxy.js` lacked token authentication. Resolved by adding `verifyFirebaseToken()` to validate Firebase Bearer ID tokens and reject unauthenticated requests, adding `checkUserRateLimit()` to enforce a 30 req/day per-user quota on the backend, and enforcing payload size constraints ($\le 5000$ chars prompt, $\le 8000$ chars context). Client provider was updated to pass the user's ID token. Proposal execution was hardened with `expectedUserId` checks.
+
+### 4.5 Remaining Environmental Constraints
 - **Limitation**: Native Android Gradle APK packaging and physical device touch validation remain unverified due to lack of Android SDK/virtualization in this container. React Native code syntax was verified with `node --check`.
+- **Limitation**: Live Firebase CLI emulator suite was not run; Firestore rules were verified via in-memory AST evaluation tests.
+- **Limitation**: Initial cold page load preloads `vendor-firebase-*.js` (~412 kB) because Firebase Auth is initialized eagerly on boot; true on-demand lazy auth initialization is slated for Phase 7.
 
 

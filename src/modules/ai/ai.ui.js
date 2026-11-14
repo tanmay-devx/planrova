@@ -37,10 +37,18 @@ import {
   MockAIProvider
 } from '../../../shared/domain/ai/index.js';
 import { getStorageItem, setStorageItem } from '../../utils/storage.js';
+import { auth } from '../../db/firebase.js';
 
 let isInitialized = false;
 let currentConversationId = 'default';
-const provider = new BackendAIProxyProvider();
+const provider = new BackendAIProxyProvider({
+  getAuthToken: async () => {
+    if (auth && auth.currentUser) {
+      return await auth.currentUser.getIdToken();
+    }
+    return null;
+  }
+});
 
 export function initAIWorkspace() {
   renderAIWorkspace();
