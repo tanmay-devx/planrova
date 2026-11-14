@@ -34,7 +34,8 @@ import {
   disableAI,
   updateDomainPermission,
   BackendAIProxyProvider,
-  MockAIProvider
+  MockAIProvider,
+  generatePersonalInsights
 } from '../../../shared/domain/ai/index.js';
 import { getStorageItem, setStorageItem } from '../../utils/storage.js';
 import { auth } from '../../db/firebase.js';
@@ -118,6 +119,9 @@ export function renderAIWorkspace() {
           ${isEnabled ? 'Loading your daily briefing...' : 'Planrova AI is disabled. Enable AI in Privacy & Permissions to view your briefing.'}
         </div>
       </div>
+
+      <!-- Proactive Personal Insights Section -->
+      ${renderPersonalInsightsSection()}
 
       <!-- Chat Feed -->
       <div id="ai-chat-feed" style="min-height: 280px; max-height: 480px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 8px 0;">
@@ -207,6 +211,60 @@ export function renderAIWorkspace() {
   if (isEnabled) {
     loadBriefingAsync();
   }
+}
+
+function renderPersonalInsightsSection() {
+  const tasks = getStorageItem('tasks') || [];
+  const courses = getStorageItem('planrova_academic_courses') || getStorageItem('academic_courses') || [];
+  const assessments = getStorageItem('planrova_academic_assessments') || getStorageItem('academic_assessments') || [];
+  const pomodoros = getStorageItem('pomodoro_sessions') || [];
+  const transactions = getStorageItem('planrova_finance_transactions') || getStorageItem('expenses') || [];
+  const projects = getStorageItem('planrova_projects') || [];
+  const hydration = getStorageItem('planrova_wellbeing_hydration') || getStorageItem('hydration_logs') || [];
+
+  const { insights } = generatePersonalInsights({
+    tasks,
+    courses,
+    assessments,
+    pomodoros,
+    transactions,
+    projects,
+    hydration
+  });
+
+  if (!insights.length) {
+    return '';
+  }
+
+  return `
+    <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <span style="font-size: 13px; font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 6px;">
+          🔍 Proactive Personal Insights & Correlations (${insights.length})
+        </span>
+        <span style="font-size: 11px; color: #78716c;">Deterministic Local Analytics</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        ${insights.map(i => `
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+              <span style="font-size: 13px; font-weight: 700; color: #f5f5f4;">${i.title}</span>
+              <span style="font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; ${i.impact === 'HIGH' ? 'background: rgba(239, 68, 68, 0.15); color: #ef4444;' : 'background: rgba(245, 158, 11, 0.15); color: #f59e0b;'}">${i.impact} IMPACT</span>
+            </div>
+            <p style="font-size: 12px; color: #d6d3d1; margin: 0; line-height: 1.5;">${escapeHtml(i.evidence)}</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.04);">
+              <span style="font-size: 11px; color: #a8a29e; font-style: italic;">💡 ${escapeHtml(i.recommendation)}</span>
+              ${i.suggestedAction ? `
+                <button class="insight-action-btn" data-target="${i.suggestedAction.targetView || ''}" style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap;">
+                  ${escapeHtml(i.suggestedAction.label)}
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
 }
 
 function renderContextPills(permissions) {
@@ -404,8 +462,20 @@ function setupAIEventListeners() {
     loadBriefingAsync();
   });
 
-  // Proposal Actions (Approve / Reject)
+  // Proposal Actions (Approve / Reject) & Insight Actions
   container.addEventListener('click', async (e) => {
+    const insightActionBtn = e.target.closest('.insight-action-btn');
+    if (insightActionBtn) {
+      const targetView = insightActionBtn.getAttribute('data-target');
+      if (targetView) {
+        const targetNav = document.getElementById(`view-${targetView}-btn`) || 
+                          document.getElementById(`view-${targetView}`) ||
+                          document.querySelector(`[data-view="${targetView}"]`);
+        if (targetNav) targetNav.click();
+      }
+      return;
+    }
+
     const approveBtn = e.target.closest('.ai-approve-btn');
     if (approveBtn) {
       const id = approveBtn.getAttribute('data-id');

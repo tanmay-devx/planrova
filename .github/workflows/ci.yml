@@ -61,3 +61,36 @@ jobs:
       - name: Verify Server Proxy Syntax
         run: node --check server/proxy.js
 
+  mobile-quality-check:
+    name: Mobile Syntax, Contract & Storage Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Root Dependencies
+        run: npm ci
+
+      - name: Verify Mobile Entrypoint and Hook Syntax
+        run: |
+          node --check mobile/index.js
+          node --check mobile/App.js
+          node --check mobile/src/firebase.js
+          node --check mobile/src/hooks/useFirestoreData.js
+          node --check mobile/src/screens/ProjectsScreen.js
+          node --check mobile/src/screens/AuthScreen.js
+          node --check mobile/src/screens/OnboardingScreen.js
+          node --check mobile/src/components/UnlockingOverlay.js
+
+      - name: Run Mobile Offline Durability & Storage Contract Tests
+        run: npx vitest run tests/mobileStorage.test.js
+
+

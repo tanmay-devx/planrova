@@ -1,5 +1,7 @@
 import { getStorageItem, setStorageItem } from '../utils/storage.js';
 import { formatDate } from '../utils/date.js';
+import { parseSingleTask } from '../utils/nlp.js';
+import { addTaskDirectly, renderGrid } from './tasks.js';
 import { 
   linkNoteAndTask, 
   unlinkNoteAndTask, 
@@ -187,7 +189,7 @@ export function renderNoteLinkedTasks(dateStr) {
         allTasks[tIdx].status = e.target.checked ? 'completed' : 'todo';
         allTasks[tIdx].updatedAt = Date.now();
         setStorageItem('tasks', allTasks);
-        import('./tasks.js').then(m => m.renderGrid && m.renderGrid());
+        if (typeof renderGrid === 'function') renderGrid();
         renderNoteLinkedTasks(dateStr);
       }
     });
@@ -205,7 +207,7 @@ export function renderNoteLinkedTasks(dateStr) {
         allTasks[tIdx] = updTask;
         setStorageItem(NOTES_KEY, allNotes);
         setStorageItem('tasks', allTasks);
-        import('./tasks.js').then(m => m.renderGrid && m.renderGrid());
+        if (typeof renderGrid === 'function') renderGrid();
         renderNoteLinkedTasks(dateStr);
       }
     });
@@ -307,7 +309,7 @@ function setupNotesEvents() {
     }
     
     // Rerender weekly columns and notes libraries
-    import('./tasks.js').then(m => m.renderGrid());
+    if (typeof renderGrid === 'function') renderGrid();
     renderNotesLibrary();
   });
   
@@ -593,7 +595,7 @@ function setupNotesEvents() {
       setStorageItem(NOTES_KEY, allNotes);
       setStorageItem('tasks', allTasks);
 
-      import('./tasks.js').then(m => m.renderGrid && m.renderGrid());
+      if (typeof renderGrid === 'function') renderGrid();
       renderNoteLinkedTasks(activeNoteDate);
     });
   }
@@ -1076,18 +1078,16 @@ function setupInlineToolbar(editor) {
       const sel = window.getSelection();
       const text = sel.toString().trim();
       if (text) {
-        import('../utils/nlp.js').then(m => {
-          const parsed = m.parseSingleTask(text);
-          import('./tasks.js').then(t => {
-            t.addTaskDirectly(parsed);
-            const toast = document.getElementById('notif-toast');
-            if (toast) {
-              document.getElementById('notif-msg').textContent = `Created task: "${parsed.title}"! ✓`;
-              toast.classList.remove('hidden');
-              setTimeout(() => toast.classList.add('hidden'), 3000);
-            }
-          });
-        });
+        const parsed = parseSingleTask(text);
+        if (typeof addTaskDirectly === 'function') {
+          addTaskDirectly(parsed);
+          const toast = document.getElementById('notif-toast');
+          if (toast) {
+            document.getElementById('notif-msg').textContent = `Created task: "${parsed.title}"! ✓`;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3000);
+          }
+        }
       }
       editor.focus();
     });

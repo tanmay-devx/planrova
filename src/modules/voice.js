@@ -1,6 +1,10 @@
 import { parseNaturalLanguageTask } from '../utils/nlp.js';
 import { addTaskDirectly } from './tasks.js';
 import { appendBrainDump } from './brain-dump.js';
+import { logBeverage } from './hydration.js';
+import { initBudgetTracker } from './budget.js';
+import { startVoiceTimer } from './pomodoro.js';
+import { getStorageItem, setStorageItem } from '../utils/storage.js';
 
 export function initVoiceInput() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -150,15 +154,12 @@ export function initVoiceInput() {
         for (const task of parsedTask) {
           if (task.action === 'water') {
             try {
-              const { logBeverage } = await import('./hydration.js');
               logBeverage(task.amount, 'Water');
             } catch (err) {
               console.error('Failed to log voice water:', err);
             }
           } else if (task.action === 'expense') {
             try {
-              const { getStorageItem, setStorageItem } = await import('../utils/storage.js');
-              const { initBudgetTracker } = await import('./budget.js');
               const expenses = getStorageItem('expenses', []);
               expenses.push({
                 id: 'exp_' + Date.now(),
@@ -174,7 +175,6 @@ export function initVoiceInput() {
             }
           } else if (task.action === 'timer') {
             try {
-              const { startVoiceTimer } = await import('./pomodoro.js');
               startVoiceTimer(task.duration);
             } catch (err) {
               console.error('Failed to start voice timer:', err);

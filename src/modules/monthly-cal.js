@@ -1,5 +1,6 @@
 import { getStorageItem, setStorageItem } from '../utils/storage.js';
 import { formatDate } from '../utils/date.js';
+import { openDayDetailPanel } from './tasks.js';
 
 let currentMonth = new Date(); // Stores month we are viewing
 
@@ -84,7 +85,7 @@ function createCalendarCell(dayNum, dateStr, isCurrentMonth, tasks, todayStr) {
   
   // Click on date cell to open Day Detail Panel
   cell.addEventListener('click', () => {
-    import('./tasks.js').then(m => m.openDayDetailPanel(dateStr));
+    if (typeof openDayDetailPanel === 'function') openDayDetailPanel(dateStr);
   });
   
   return cell;

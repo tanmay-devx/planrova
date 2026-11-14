@@ -13,7 +13,7 @@ function splitMultiTasks(text) {
   return text.split(/\s*(?:\band\b|\bthen\b|\balso\b|\bplus\b|[,;])\s*/i).filter(p => p.trim().length > 0);
 }
 
-function parseSingleTask(text) {
+export function parseSingleTask(text) {
   const now = new Date();
   
   // Preprocess

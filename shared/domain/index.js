@@ -38,3 +38,6 @@ export * from './wellbeing/index.js';
 // Hybrid AI Assistance
 export * from './ai/index.js';
 
+// Professional Projects Domain
+export * from './projects/index.js';
+

@@ -14,4 +14,5 @@ export * from './ai.provider.js';
 export * from './ai.privacy.js';
 export * from './ai.usage.js';
 export * from './ai.orchestrator.js';
+export * from './ai.insights.js';
 

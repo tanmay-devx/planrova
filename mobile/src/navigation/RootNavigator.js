@@ -18,6 +18,7 @@ import AcademicScreen from '../screens/AcademicScreen';
 import FinanceScreen from '../screens/FinanceScreen';
 import WellbeingScreen from '../screens/WellbeingScreen';
 import AIAssistantScreen from '../screens/AIAssistantScreen';
+import ProjectsScreen from '../screens/ProjectsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -130,6 +131,11 @@ export default function RootNavigator() {
         name="AIAssistantWorkspace" 
         component={AIAssistantScreen} 
         options={{ title: 'AI Assistant' }} 
+      />
+      <Stack.Screen 
+        name="ProjectsWorkspace" 
+        component={ProjectsScreen} 
+        options={{ title: 'Projects & Milestones' }} 
       />
     </Stack.Navigator>
   );

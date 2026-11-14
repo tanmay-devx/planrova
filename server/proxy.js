@@ -8,6 +8,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import crypto from 'crypto';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ── 1. Load .env file manually (zero external dependencies) ──────────────
@@ -39,11 +41,74 @@ const RATE_LIMIT_MAX_REQUESTS = 20; // 20 scans per minute per client IP
 // User-scoped sliding-window daily quota: Map<userId, Array<timestamp>>
 const userQuotaMap = new Map();
 
+// In-memory cache for Google public x509 certificates
+let googlePublicKeysCache = null;
+let googlePublicKeysExpiresAt = 0;
+let testPublicKeys = null;
+
+export function setTestPublicKeys(keys) {
+  testPublicKeys = keys;
+}
+
+export function clearGooglePublicKeysCache() {
+  googlePublicKeysCache = null;
+  googlePublicKeysExpiresAt = 0;
+  testPublicKeys = null;
+}
+
 /**
- * Verifies Firebase Authentication token from Authorization header.
+ * Fetches Google's public certificates for Firebase Auth token verification.
+ * Respects Cache-Control max-age for caching.
+ */
+export async function getGooglePublicKeys(forceRefresh = false) {
+  if (testPublicKeys) {
+    return testPublicKeys;
+  }
+
+  const now = Date.now();
+  if (!forceRefresh && googlePublicKeysCache && now < googlePublicKeysExpiresAt) {
+    return googlePublicKeysCache;
+  }
+
+  return new Promise((resolve) => {
+    const certUrl = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
+    const req = https.get(certUrl, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const keys = JSON.parse(data);
+          const cacheControl = res.headers['cache-control'] || '';
+          const maxAgeMatch = cacheControl.match(/max-age=(\d+)/);
+          const maxAgeSec = maxAgeMatch ? parseInt(maxAgeMatch[1], 10) : 21600; // default 6h
+          googlePublicKeysCache = keys;
+          googlePublicKeysExpiresAt = now + (maxAgeSec * 1000);
+          resolve(keys);
+        } catch (e) {
+          console.warn('[Auth] Failed to parse Google public keys:', e.message);
+          resolve(googlePublicKeysCache || {});
+        }
+      });
+    });
+
+    req.on('error', (err) => {
+      console.warn('[Auth] Error fetching Google public keys:', err.message);
+      resolve(googlePublicKeysCache || {});
+    });
+
+    req.setTimeout(5000, () => {
+      req.destroy();
+      resolve(googlePublicKeysCache || {});
+    });
+  });
+}
+
+/**
+ * Cryptographically verifies Firebase Authentication ID token.
+ * Validates RSA256 signature against Google's public certificates.
  * Derives trusted user identity strictly from verified token claims.
  */
-export function verifyFirebaseToken(authHeader) {
+export async function verifyFirebaseToken(authHeader, options = {}) {
   if (!authHeader || typeof authHeader !== 'string') {
     return { valid: false, error: 'Missing Authorization header' };
   }
@@ -58,8 +123,12 @@ export function verifyFirebaseToken(authHeader) {
     return { valid: false, error: 'Empty bearer token' };
   }
 
-  // 1. Support test tokens for offline & CI test suites (test_token_<userId>)
+  // 1. Strict test token isolation: ONLY permitted when NODE_ENV === 'test'
   if (token.startsWith('test_token_')) {
+    const isTestEnv = process.env.NODE_ENV === 'test' || options.allowTestTokens === true;
+    if (!isTestEnv) {
+      return { valid: false, error: 'Test tokens are strictly disabled in production' };
+    }
     const uid = token.replace('test_token_', '').trim();
     if (!uid) return { valid: false, error: 'Invalid test token identifier' };
     return { valid: true, userId: uid, authTime: Math.floor(Date.now() / 1000) };
@@ -71,39 +140,76 @@ export function verifyFirebaseToken(authHeader) {
     return { valid: false, error: 'Invalid JWT structure' };
   }
 
+  let header, payload;
+  try {
+    const headerStr = Buffer.from(segments[0], 'base64url').toString('utf8');
+    header = JSON.parse(headerStr);
+  } catch (err) {
+    return { valid: false, error: `Invalid JWT header: ${err.message}` };
+  }
+
   try {
     const payloadStr = Buffer.from(segments[1], 'base64url').toString('utf8');
-    const payload = JSON.parse(payloadStr);
-
-    // Verify token claims
-    if (payload.aud !== FIREBASE_PROJECT_ID) {
-      return { valid: false, error: `Token audience mismatch: expected ${FIREBASE_PROJECT_ID}, got ${payload.aud}` };
-    }
-
-    const expectedIssuer = `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
-    if (payload.iss !== expectedIssuer) {
-      return { valid: false, error: `Token issuer mismatch: expected ${expectedIssuer}` };
-    }
-
-    const nowSec = Math.floor(Date.now() / 1000);
-    if (typeof payload.exp === 'number' && payload.exp < nowSec) {
-      return { valid: false, error: 'Token has expired' };
-    }
-
-    const userId = payload.user_id || payload.sub;
-    if (!userId || typeof userId !== 'string') {
-      return { valid: false, error: 'Token missing user identity claim (sub/user_id)' };
-    }
-
-    return {
-      valid: true,
-      userId,
-      email: payload.email,
-      authTime: payload.auth_time
-    };
+    payload = JSON.parse(payloadStr);
   } catch (err) {
     return { valid: false, error: `Token parsing failed: ${err.message}` };
   }
+
+  // 3. Cryptographic Algorithm and Key ID Checks
+  if (header.alg !== 'RS256') {
+    return { valid: false, error: `Invalid token algorithm: expected RS256, got ${header.alg}` };
+  }
+
+  if (!header.kid || typeof header.kid !== 'string') {
+    return { valid: false, error: 'Missing key ID (kid) in token header' };
+  }
+
+  // 4. Verify Claims (Audience, Issuer, Expiry, Subject)
+  if (payload.aud !== FIREBASE_PROJECT_ID) {
+    return { valid: false, error: `Token audience mismatch: expected ${FIREBASE_PROJECT_ID}, got ${payload.aud}` };
+  }
+
+  const expectedIssuer = `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
+  if (payload.iss !== expectedIssuer) {
+    return { valid: false, error: `Token issuer mismatch: expected ${expectedIssuer}` };
+  }
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (typeof payload.exp === 'number' && payload.exp < nowSec) {
+    return { valid: false, error: 'Token has expired' };
+  }
+
+  const userId = payload.user_id || payload.sub;
+  if (!userId || typeof userId !== 'string') {
+    return { valid: false, error: 'Token missing user identity claim (sub/user_id)' };
+  }
+
+  // 5. Cryptographic Signature Verification
+  const certMap = options.publicKeys || (testPublicKeys || await getGooglePublicKeys());
+  const cert = certMap ? certMap[header.kid] : null;
+
+  if (!cert) {
+    return { valid: false, error: `Public certificate not found for kid: ${header.kid}` };
+  }
+
+  try {
+    const verifier = crypto.createVerify('RSA-SHA256');
+    verifier.update(`${segments[0]}.${segments[1]}`);
+    const isSignatureValid = verifier.verify(cert, segments[2], 'base64url');
+
+    if (!isSignatureValid) {
+      return { valid: false, error: 'Invalid token signature' };
+    }
+  } catch (sigErr) {
+    return { valid: false, error: `Signature verification error: ${sigErr.message}` };
+  }
+
+  return {
+    valid: true,
+    userId,
+    email: payload.email,
+    authTime: payload.auth_time
+  };
 }
 
 /**
@@ -296,7 +402,7 @@ export const server = http.createServer(async (req, res) => {
 
     // 1. Verify Authentication Token
     const authHeader = req.headers['authorization'];
-    const authResult = verifyFirebaseToken(authHeader);
+    const authResult = await verifyFirebaseToken(authHeader);
     if (!authResult.valid) {
       return sendJSON(res, 401, {
         error: `Unauthorized: ${authResult.error}`

@@ -3,6 +3,8 @@ import { getStartOfWeek, getWeekDays, formatDate, formatTime, getDayName, getFor
 import { setFocusTask, addForestGrowth } from './pomodoro.js';
 import { renderMonthlyCalendar } from './monthly-cal.js';
 import { appendNotesButtonToHeader, renderPinnedNoteInsideColumn, openNotesDrawer } from './notes.js';
+import { initHydration } from './hydration.js';
+import { initBrainDump } from './brain-dump.js';
 import { 
   linkNoteAndTask, 
   unlinkNoteAndTask, 
@@ -234,7 +236,7 @@ function createTaskCard(task) {
   if (badge) {
     badge.addEventListener('click', (e) => {
       e.stopPropagation();
-      import('./notes.js').then(m => m.openNotesDrawer(badge.dataset.date));
+      openNotesDrawer(badge.dataset.date);
     });
   }
   
@@ -450,7 +452,7 @@ export function addTaskDirectly(taskObj) {
   renderGrid();
   
   // Trigger check for hydration context update since study task may be added
-  import('./hydration.js').then(m => m.initHydration());
+  initHydration();
 }
 
 // Add/Edit modal handlers
@@ -645,7 +647,7 @@ function setupModalEvents() {
     renderGrid();
     
     // Check for hydration context update since study task may be added
-    import('./hydration.js').then(m => m.initHydration());
+    initHydration();
   });
 }
 
@@ -784,7 +786,7 @@ function setupDropZones() {
         setStorageItem('brain_dump', dumps);
         
         // Rerender braindump list
-        import('./brain-dump.js').then(m => m.initBrainDump());
+        initBrainDump();
       }
     }
   });

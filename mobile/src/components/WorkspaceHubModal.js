@@ -108,6 +108,15 @@ const MODULES = [
     icon: 'sparkles',
     color: '#C2A878',
     bgColor: 'rgba(194, 168, 120, 0.15)'
+  },
+  {
+    id: 'projects',
+    screenName: 'ProjectsWorkspace',
+    title: 'Projects',
+    desc: 'Roadmaps & milestones',
+    icon: 'briefcase',
+    color: '#38BDF8',
+    bgColor: 'rgba(56, 189, 248, 0.15)'
   }
 ];
 

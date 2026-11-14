@@ -1,6 +1,7 @@
 import { getStorageItem, setStorageItem, removeStorageItem } from '../utils/storage.js';
 import { auth } from '../db/firebase.js';
 import { deleteUser } from 'firebase/auth';
+import { localDB } from '../db/database.js';
 import QRCode from 'qrcode';
 
 const PROFILE_KEY = 'user_profile';
@@ -382,7 +383,6 @@ function setupWorkspaceSettings() {
             }
             // Clear IndexedDB
             try {
-              const { localDB } = await import('../db/database.js');
               await localDB.kv_store.clear();
             } catch (err) {
               console.error('Dexie clear failed:', err);

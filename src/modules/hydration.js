@@ -387,7 +387,7 @@ function setupHydrationEvents() {
 
 import { addXP, logDailyActivity } from './gamification.js';
 
-function logBeverage(amount, type) {
+export function logBeverage(amount, type) {
   try {
     const settings = getStorageItem(HYDRATION_SETTINGS_KEY, defaultSettings);
     const logs = getStorageItem(HYDRATION_KEY, []);

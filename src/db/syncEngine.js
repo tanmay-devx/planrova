@@ -158,6 +158,12 @@ export function startRealtimeSync() {
           // Conflict detected between unsynced local edit and cloud update
           console.log(`[SyncEngine] Conflict detected for key: ${itemKey}. Merging with tombstones...`);
           const mergedValue = resolveSyncConflict(itemKey, localRecord, cloudData);
+
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('planrova:sync_conflict', { 
+              detail: { key: itemKey, timestamp: Date.now() } 
+            }));
+          }
           
           await localDB.kv_store.put({
             id: scopedId,

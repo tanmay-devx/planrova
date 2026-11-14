@@ -12,3 +12,4 @@ export * from './budget.engine.js';
 export * from './recurring.engine.js';
 export * from './savings.engine.js';
 export * from './finance-scheduler.adapter.js';
+export * from './finance.intelligence.js';

@@ -8,13 +8,13 @@ import { initShop } from './modules/shop.js';
 import { initStudypool } from './modules/studypool.js';
 import { initBrainDump } from './modules/brain-dump.js';
 import { initVoiceInput } from './modules/voice.js';
-import { initPomodoro, stopAmbientSound } from './modules/pomodoro.js';
+import { initPomodoro, stopAmbientSound, updateForestPageView } from './modules/pomodoro.js';
 import { initHabits } from './modules/habits.js';
 import { initMonthlyCalendar, renderMonthlyCalendar } from './modules/monthly-cal.js';
 import { initTasks, renderGrid } from './modules/tasks.js';
 import { initBudgetTracker } from './modules/budget.js';
 import { initHydration } from './modules/hydration.js';
-import { initNotes, renderNotesLibrary } from './modules/notes.js';
+import { initNotes, renderNotesLibrary, openNotesDrawer } from './modules/notes.js';
 
 import { initGamification, populateWeekInReview } from './modules/gamification.js';
 import { initThemeToggle, initZenMode, initLivePresence, initCollapsibleSections } from './modules/advanced-focus.js';
@@ -26,6 +26,10 @@ import { COLORS, TYPOGRAPHY, BORDER_RADIUS } from './utils/tokens.js';
 import { initCommandPalette } from './modules/command-palette.js';
 import { initQuickCaptureUI } from './modules/quick-capture/capture-ui.js';
 import { initAdaptivePlanningUI, renderTodayPlan } from './modules/adaptive-planning/planning-ui.js';
+import { initCommandCenter, renderCommandCenter } from './modules/command-center/command-center.ui.js';
+import { initOnboarding } from './modules/onboarding/onboarding.ui.js';
+import { initSyncStatusUI } from './modules/sync/sync-status.ui.js';
+import { initProjectsWorkspace, renderProjectsWorkspace } from './modules/projects/projects.ui.js';
 
 function injectCSSVariables() {
   const root = document.documentElement;
@@ -90,6 +94,10 @@ function runInit() {
   safeInit('CommandPalette', initCommandPalette);
   safeInit('QuickCapture', initQuickCaptureUI);
   safeInit('AdaptivePlanning', initAdaptivePlanningUI);
+  safeInit('CommandCenter', initCommandCenter);
+  safeInit('Onboarding', initOnboarding);
+  safeInit('SyncStatusUI', initSyncStatusUI);
+  safeInit('Projects', initProjectsWorkspace);
 
   // 3. Setup General Layout Triggers & Navigation switches
   safeInit('GeneralUI', setupGeneralUI);
@@ -168,21 +176,25 @@ function setupGeneralUI() {
     });
   }
 
-  // View switches (Weekly Timetable vs Dedicated Month Calendar vs Focus Forest vs Social Studypool vs Today Plan vs Academic vs Finance vs Wellbeing)
+  // View switches (Command Center vs Weekly Timetable vs Dedicated Month Calendar vs Focus Forest vs Social Studypool vs Today Plan vs Academic vs Finance vs Wellbeing)
+  const viewCommandCenterBtn = document.getElementById('view-command-center-btn');
   const viewWeeklyBtn = document.getElementById('view-weekly-btn');
   const viewCalendarBtn = document.getElementById('view-calendar-btn');
   const viewPlanBtn = document.getElementById('view-plan-btn');
   const viewAcademicBtn = document.getElementById('view-academic-btn');
+  const viewProjectsBtn = document.getElementById('view-projects-btn');
   const viewFinanceBtn = document.getElementById('view-finance-btn');
   const viewWellbeingBtn = document.getElementById('view-wellbeing-btn');
   const viewAIBtn = document.getElementById('view-ai-btn');
   const viewForestBtn = document.getElementById('sidebar-nav-forest');
   const viewStudypoolBtn = document.getElementById('sidebar-nav-studypool');
   
+  const homeCommandCenterView = document.getElementById('home-command-center-view');
   const weeklyGrid = document.getElementById('weekly-grid-view');
   const monthlyCalendar = document.getElementById('monthly-calendar-view');
   const todayPlanView = document.getElementById('today-plan-view');
   const academicWorkspaceView = document.getElementById('academic-workspace-view');
+  const projectsWorkspaceView = document.getElementById('projects-workspace-view');
   const financeWorkspaceView = document.getElementById('finance-workspace-view');
   const wellbeingWorkspaceView = document.getElementById('wellbeing-workspace-view');
   const aiWorkspaceView = document.getElementById('ai-workspace-view');
@@ -190,21 +202,27 @@ function setupGeneralUI() {
   const studypoolView = document.getElementById('studypool-view');
 
   function switchMainView(viewId) {
+    if (homeCommandCenterView) homeCommandCenterView.classList.add('hidden');
     if (weeklyGrid) weeklyGrid.classList.add('hidden');
     if (monthlyCalendar) monthlyCalendar.classList.add('hidden');
     if (todayPlanView) todayPlanView.classList.add('hidden');
     if (academicWorkspaceView) academicWorkspaceView.classList.add('hidden');
+    if (projectsWorkspaceView) projectsWorkspaceView.classList.add('hidden');
     if (financeWorkspaceView) financeWorkspaceView.classList.add('hidden');
     if (wellbeingWorkspaceView) wellbeingWorkspaceView.classList.add('hidden');
     if (aiWorkspaceView) aiWorkspaceView.classList.add('hidden');
     if (forestView) forestView.classList.add('hidden');
     if (studypoolView) studypoolView.classList.add('hidden');
 
-    [viewWeeklyBtn, viewCalendarBtn, viewPlanBtn, viewAcademicBtn, viewFinanceBtn, viewWellbeingBtn, viewAIBtn, viewForestBtn, viewStudypoolBtn].forEach(btn => {
+    [viewCommandCenterBtn, viewWeeklyBtn, viewCalendarBtn, viewPlanBtn, viewAcademicBtn, viewProjectsBtn, viewFinanceBtn, viewWellbeingBtn, viewAIBtn, viewForestBtn, viewStudypoolBtn].forEach(btn => {
       if (btn) btn.classList.remove('active');
     });
 
-    if (viewId === 'weekly') {
+    if (viewId === 'home' || viewId === 'command-center') {
+      if (homeCommandCenterView) homeCommandCenterView.classList.remove('hidden');
+      if (viewCommandCenterBtn) viewCommandCenterBtn.classList.add('active');
+      renderCommandCenter();
+    } else if (viewId === 'weekly') {
       if (weeklyGrid) weeklyGrid.classList.remove('hidden');
       if (viewWeeklyBtn) viewWeeklyBtn.classList.add('active');
       renderGrid();
@@ -220,6 +238,10 @@ function setupGeneralUI() {
       if (academicWorkspaceView) academicWorkspaceView.classList.remove('hidden');
       if (viewAcademicBtn) viewAcademicBtn.classList.add('active');
       import('./modules/academic/academic.ui.js').then(m => m.renderAcademicWorkspace());
+    } else if (viewId === 'projects') {
+      if (projectsWorkspaceView) projectsWorkspaceView.classList.remove('hidden');
+      if (viewProjectsBtn) viewProjectsBtn.classList.add('active');
+      renderProjectsWorkspace();
     } else if (viewId === 'finance') {
       if (financeWorkspaceView) financeWorkspaceView.classList.remove('hidden');
       if (viewFinanceBtn) viewFinanceBtn.classList.add('active');
@@ -235,17 +257,20 @@ function setupGeneralUI() {
     } else if (viewId === 'forest') {
       if (forestView) forestView.classList.remove('hidden');
       if (viewForestBtn) viewForestBtn.classList.add('active');
-      import('./modules/pomodoro.js').then(m => m.updateForestPageView());
+      updateForestPageView();
     } else if (viewId === 'studypool') {
       if (studypoolView) studypoolView.classList.remove('hidden');
       if (viewStudypoolBtn) viewStudypoolBtn.classList.add('active');
-      import('./modules/studypool.js').then(m => m.initStudypool());
+      initStudypool();
     }
   }
 
   // Expose switchMainView on window for other modules
   window.switchMainView = switchMainView;
 
+  if (viewCommandCenterBtn) {
+    viewCommandCenterBtn.addEventListener('click', () => switchMainView('home'));
+  }
   if (viewWeeklyBtn) {
     viewWeeklyBtn.addEventListener('click', () => switchMainView('weekly'));
   }
@@ -257,6 +282,9 @@ function setupGeneralUI() {
   }
   if (viewAcademicBtn) {
     viewAcademicBtn.addEventListener('click', () => switchMainView('academic'));
+  }
+  if (viewProjectsBtn) {
+    viewProjectsBtn.addEventListener('click', () => switchMainView('projects'));
   }
   if (viewFinanceBtn) {
     viewFinanceBtn.addEventListener('click', () => switchMainView('finance'));
@@ -507,6 +535,9 @@ function setupGeneralUI() {
     });
   }
 
+  // Default landing view: Daily Command Center
+  switchMainView('home');
+
   // Sync mobile dashboard values periodically
   setInterval(syncMobileDashboard, 1000);
 
@@ -540,9 +571,7 @@ function setupKeyboardShortcuts() {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
       e.preventDefault();
       const todayStr = new Date().toISOString().split('T')[0];
-      import('./modules/notes.js').then(m => {
-        m.openNotesDrawer(todayStr);
-      });
+      openNotesDrawer(todayStr);
     }
     
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 't') {
@@ -566,7 +595,7 @@ function setupKeyboardShortcuts() {
       const notesBtn = document.getElementById('notes-library-modal-overlay');
       if (notesBtn) {
         notesBtn.classList.remove('hidden');
-        import('./modules/notes.js').then(m => m.renderNotesLibrary());
+        renderNotesLibrary();
       }
     } else if (e.key === '4') {
       document.getElementById('pomodoro-modal-overlay').classList.remove('hidden');

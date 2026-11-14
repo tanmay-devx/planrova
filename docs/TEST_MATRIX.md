@@ -1,24 +1,26 @@
 # Planrova 2.0 — Quality Engineering Test Matrix
+## Complete Master Verification Inventory (55 Suites | 408 Tests)
 
-**Execution Date:** 2026-11-14T22:52:22+05:30  
+**Execution Date:** 2026-11-15T00:45:52+05:30  
 **Test Runner:** Vitest v5.1.0  
-**Target Environment:** Node.js (in-memory mock Dexie & Firestore adapters)  
-**Document:** `docs/TEST_MATRIX.md`
+**Target Environments:** Node.js (in-memory mock Dexie & Firestore adapters) + Client Web Build  
+**Document:** [`docs/TEST_MATRIX.md`](file:///home/tanmay/Videos/planrova/docs/TEST_MATRIX.md)
 
 ---
 
 ## 1. Executive Summary
 
 ```
-Test Files  46 passed (46)
-     Tests  331 passed (331)
-  Duration  1.16s
+Test Files  55 passed (55)
+     Tests  408 passed (408)
+  Duration  1.54s
 ```
 
-- **Total Test Suites:** 46 test files.
-- **Total Tests:** 331 passing tests (100% pass rate).
+- **Total Test Suites:** 55 test files.
+- **Total Tests:** 408 passing tests (100% pass rate).
 - **Regressions / Failures:** 0.
 - **Skipped Tests:** 0.
+- **Production Build:** Clean `vite build` completed in ~230ms with 0 warnings and 0 errors.
 
 ---
 
@@ -35,42 +37,49 @@ Test Files  46 passed (46)
 | 7 | `tests/academicStage7.test.js` | Leitner Spaced Repetition Engine | 7 | ✓ Passed |
 | 8 | `tests/academicStage8.test.js` | Academic Analytics Engine | 1 | ✓ Passed |
 | 9 | `tests/academicStage9.test.js` | Academic Scheduling Adapter | 2 | ✓ Passed |
-| 10 | `tests/academicStage10.test.js` | Academic Quick Capture | 4 | ✓ Passed |
-| 11 | `tests/academicStage11.test.js` | Academic Storage & Isolation | 2 | ✓ Passed |
-| 12 | `tests/accountIsolation.test.js` | Tenant Partitioning & Cache Purge | 4 | ✓ Passed |
+| 10 | `tests/academicStage11.test.js` | Academic Storage & Isolation | 2 | ✓ Passed |
+| 11 | `tests/accountIsolation.test.js` | Tenant Partitioning & Cache Purge | 4 | ✓ Passed |
+| 12 | `tests/aiInsights.test.js` | Cross-Domain Pattern Detection Engine | 7 | ✓ Passed |
 | 13 | `tests/budget.test.js` | Legacy Budget Compatibility | 2 | ✓ Passed |
 | 14 | `tests/capture.test.js` | Universal Quick Capture (Phase 2) | 13 | ✓ Passed |
-| 15 | `tests/date.test.js` | Date & Calendar Utilities | 7 | ✓ Passed |
-| 16 | `tests/domain.test.js` | Canonical Domain Schemas | 10 | ✓ Passed |
-| 17 | `tests/habitMigration.test.js` | Habit Schema Migration | 6 | ✓ Passed |
-| 18 | `tests/habitsSync.test.js` | Cross-Platform Habit Sync | 2 | ✓ Passed |
-| 19 | `tests/logger.test.js` | Secure Logging & Redaction | 2 | ✓ Passed |
-| 20 | `tests/migrations.test.js` | Data Migrations | 3 | ✓ Passed |
-| 21 | `tests/nlp.test.js` | NLP Task Parser | 8 | ✓ Passed |
-| 22 | `tests/proxy.test.js` | OCR Proxy Rate Limiting | 3 | ✓ Passed |
-| 23 | `tests/pwa.test.js` | PWA & Service Worker Manifest | 3 | ✓ Passed |
-| 24 | `tests/relationships.test.js` | Entity Links & Graph Relations | 4 | ✓ Passed |
-| 25 | `tests/schedulingStage2.test.js` | Availability & Calendar Engine | 19 | ✓ Passed |
-| 26 | `tests/schedulingStage3.test.js` | Workload Modeling Engine | 9 | ✓ Passed |
-| 27 | `tests/schedulingStage4.test.js` | Candidate Slot Suitability | 13 | ✓ Passed |
-| 28 | `tests/schedulingStage5.test.js` | Adaptive Schedule Proposals | 8 | ✓ Passed |
-| 29 | `tests/schedulingStage6.test.js` | Split-Task & Rescheduling | 4 | ✓ Passed |
-| 30 | `tests/schedulingStage7.test.js` | Snapshot Freshness & Hash Checks | 6 | ✓ Passed |
-| 31 | `tests/syncEngine.test.js` | Conflict Resolution & Tombstones | 6 | ✓ Passed |
-| 32 | `tests/validation.test.js` | Minor Units & Domain Validation | 12 | ✓ Passed |
-| 33 | `tests/financeStage1.test.js` | Finance Schemas & Minor Units | 12 | ✓ Passed |
-| 34 | `tests/financeStage2.test.js` | Transaction Engine & Reconcile | 6 | ✓ Passed |
-| 35 | `tests/financeStage3.test.js` | Budget Intelligence Engine | 6 | ✓ Passed |
-| 36 | `tests/financeStage4.test.js` | Recurring Payments Engine | 5 | ✓ Passed |
-| 37 | `tests/financeStage5.test.js` | Savings Goals Engine | 3 | ✓ Passed |
-| 38 | `tests/wellbeingStage6.test.js`| Wellbeing Schemas & Normalizers | 6 | ✓ Passed |
-| 39 | `tests/wellbeingStage7.test.js`| Habit Streak Engine | 5 | ✓ Passed |
-| 40 | `tests/wellbeingStage8.test.js`| Hydration Engine | 4 | ✓ Passed |
-| 41 | `tests/phase5Scheduling.test.js`| Phase 5 Scheduling Adapters | 4 | ✓ Passed |
-| 42 | `tests/phase5Capture.test.js` | Phase 5 Quick Capture | 12 | ✓ Passed |
-| 43 | `tests/phase6Reliability.test.js` | Firestore Isolation & Recurring Recovery | 10 | ✓ Passed |
-| 44 | `tests/phase6AI.test.js` | Hybrid AI Assistance Architecture | 17 | ✓ Passed |
-| 45 | `tests/proxySecurity.test.js` | Server Token Verification & Rate Limiting | 15 | ✓ Passed |
-| 46 | `tests/phase6ContextAudit.test.js` | AI Context Minimization & Privacy Audit | 6 | ✓ Passed |
-| 47 | `tests/phase6FinanceFailureStages.test.js` | Finance Ledger Across 8 Failure Stages | 6 | ✓ Passed |
-
+| 15 | `tests/commandCenter.test.js` | Daily Command Center & Next Best Action | 15 | ✓ Passed |
+| 16 | `tests/date.test.js` | Date & Calendar Utilities | 7 | ✓ Passed |
+| 17 | `tests/domain.test.js` | Canonical Domain Schemas | 10 | ✓ Passed |
+| 18 | `tests/financeIntelligence.test.js` | Cash Flow Velocity & Runways | 7 | ✓ Passed |
+| 19 | `tests/financeStage1.test.js` | Finance Schemas & Minor Units | 12 | ✓ Passed |
+| 20 | `tests/financeStage2.test.js` | Transaction Engine & Reconcile | 6 | ✓ Passed |
+| 21 | `tests/financeStage3.test.js` | Budget Intelligence Engine | 6 | ✓ Passed |
+| 22 | `tests/financeStage4.test.js` | Recurring Payments Engine | 5 | ✓ Passed |
+| 23 | `tests/financeStage5.test.js` | Savings Goals Engine | 3 | ✓ Passed |
+| 24 | `tests/habitMigration.test.js` | Habit Schema Migration | 6 | ✓ Passed |
+| 25 | `tests/habitsSync.test.js` | Cross-Platform Habit Sync | 2 | ✓ Passed |
+| 26 | `tests/logger.test.js` | Secure Logging & Redaction | 2 | ✓ Passed |
+| 27 | `tests/migrations.test.js` | Data Migrations | 3 | ✓ Passed |
+| 28 | `tests/mobileScreens.test.js` | Mobile Parity & Screen Contracts | 6 | ✓ Passed |
+| 29 | `tests/mobileStorage.test.js` | Mobile Offline Storage & Pending Sync Queue | 5 | ✓ Passed |
+| 30 | `tests/nlp.test.js` | NLP Task Parser | 8 | ✓ Passed |
+| 31 | `tests/onboarding.test.js` | Onboarding Flow & Persona Seeding | 3 | ✓ Passed |
+| 32 | `tests/phase5Capture.test.js` | Phase 5 Quick Capture | 12 | ✓ Passed |
+| 33 | `tests/phase5Scheduling.test.js` | Phase 5 Scheduling Adapters | 4 | ✓ Passed |
+| 34 | `tests/phase6AI.test.js` | Hybrid AI Assistance Architecture | 17 | ✓ Passed |
+| 35 | `tests/phase6ContextAudit.test.js` | AI Context Minimization & Privacy Audit | 6 | ✓ Passed |
+| 36 | `tests/phase6FinanceFailureStages.test.js` | Finance Ledger Across 8 Failure Stages | 6 | ✓ Passed |
+| 37 | `tests/phase6Reliability.test.js` | Firestore Isolation & Recurring Recovery | 10 | ✓ Passed |
+| 38 | `tests/projectsDomain.test.js` | Projects Workspace & Milestone Engine | 13 | ✓ Passed |
+| 39 | `tests/proxy.test.js` | OCR Proxy Rate Limiting | 3 | ✓ Passed |
+| 40 | `tests/proxySecurity.test.js` | Token Crypto Verification & Rate Limits | 19 | ✓ Passed |
+| 41 | `tests/pwa.test.js` | PWA & Service Worker Manifest | 3 | ✓ Passed |
+| 42 | `tests/relationships.test.js` | Entity Links & Graph Relations | 4 | ✓ Passed |
+| 43 | `tests/schedulingStage2.test.js` | Availability & Calendar Engine | 19 | ✓ Passed |
+| 44 | `tests/schedulingStage3.test.js` | Workload Modeling Engine | 9 | ✓ Passed |
+| 45 | `tests/schedulingStage4.test.js` | Candidate Slot Suitability | 13 | ✓ Passed |
+| 46 | `tests/schedulingStage5.test.js` | Adaptive Schedule Proposals | 8 | ✓ Passed |
+| 47 | `tests/schedulingStage6.test.js` | Split-Task & Rescheduling | 4 | ✓ Passed |
+| 48 | `tests/schedulingStage7.test.js` | Snapshot Freshness & Hash Checks | 6 | ✓ Passed |
+| 49 | `tests/syncEngine.test.js` | Conflict Resolution & Tombstones | 6 | ✓ Passed |
+| 50 | `tests/syncTransparency.test.js` | Visual Status Pill & Conflict Audit | 9 | ✓ Passed |
+| 51 | `tests/universalSearch.test.js` | Universal Global Search Indexing | 8 | ✓ Passed |
+| 52 | `tests/validation.test.js` | Minor Units & Domain Validation | 12 | ✓ Passed |
+| 53 | `tests/wellbeingStage6.test.js` | Wellbeing Schemas & Normalizers | 6 | ✓ Passed |
+| 54 | `tests/wellbeingStage7.test.js` | Habit Streak Engine | 5 | ✓ Passed |
+| 55 | `tests/wellbeingStage8.test.js` | Hydration Engine | 4 | ✓ Passed |

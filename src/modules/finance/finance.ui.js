@@ -29,6 +29,11 @@ import { getUpcomingRecurringOccurrences, recordRecurringPaymentPaid } from '../
 import { evaluateSavingsGoal, recordSavingsContribution } from '../../../shared/domain/finance/savings.engine.js';
 import { formatCurrency, toMinorUnits } from '../../../shared/domain/finance/finance.utils.js';
 import { DEFAULT_FINANCIAL_CATEGORIES } from '../../../shared/domain/finance/finance.types.js';
+import {
+  computeCashFlowVelocity,
+  projectMonthlySpend,
+  computeBudgetVariance
+} from '../../../shared/domain/finance/finance.intelligence.js';
 
 let isInitialized = false;
 
@@ -73,6 +78,30 @@ export function renderFinanceWorkspace() {
   // 4. Savings goals evaluations
   const evaluatedGoals = savingsGoals.map(g => evaluateSavingsGoal(g, nowStr));
 
+  // 5. Cashflow Velocity & Predictive Run-Rate Intelligence
+  const totalBalanceMinor = accounts.reduce((sum, a) => sum + (Number(a.currentBalanceMinor) || 0), 0);
+  const velocity = computeCashFlowVelocity({
+    transactions: txns,
+    days: 30,
+    totalLiquidBalanceMinor: totalBalanceMinor,
+    referenceDate: new Date()
+  });
+
+  const currentDay = new Date().getDate();
+  const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+  const projection = projectMonthlySpend({
+    currentSpendMinor: monthlyTotals.totalExpenseMinor,
+    currentDay,
+    totalDaysInMonth: daysInMonth
+  });
+
+  const variances = computeBudgetVariance({
+    budgets,
+    transactions: txns,
+    nowStr
+  });
+  const atRiskBudgets = variances.filter(v => v.alertLevel === 'warning' || v.alertLevel === 'critical');
+
   // Render HTML structure
   container.innerHTML = `
     <div class="finance-header-row" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -90,7 +119,7 @@ export function renderFinanceWorkspace() {
     </div>
 
     <!-- Summary Metrics Cards -->
-    <div class="finance-metrics-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:24px;">
+    <div class="finance-metrics-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:20px;">
       <div class="metric-card" style="background:var(--bg-secondary); padding:16px; border-radius:12px; border:1px solid var(--border-color);">
         <div style="font-size:12px; color:var(--text-secondary); text-transform:uppercase; font-weight:600;">Monthly Income</div>
         <div style="font-size:22px; font-weight:700; color:#10B981; margin-top:4px;">${formatCurrency(monthlyTotals.totalIncomeMinor)}</div>
@@ -109,6 +138,49 @@ export function renderFinanceWorkspace() {
         <div style="font-size:12px; color:var(--text-secondary); text-transform:uppercase; font-weight:600;">Remaining Budget</div>
         <div style="font-size:22px; font-weight:700; color:var(--accent-color); margin-top:4px;">${formatCurrency(budgetSummary.totalRemainingMinor)}</div>
       </div>
+    </div>
+
+    <!-- Finance Intelligence & Cashflow Velocity Card -->
+    <div class="card" style="background:linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, var(--bg-secondary) 100%); padding:18px 20px; border-radius:14px; border:1px solid rgba(59, 130, 246, 0.25); margin-bottom:24px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:16px;">💡</span>
+          <span style="font-size:12px; font-weight:700; color:#60a5fa; text-transform:uppercase; letter-spacing:0.06em;">Finance Intelligence & Velocity</span>
+        </div>
+        <span style="font-size:11px; padding:3px 10px; border-radius:8px; background:rgba(255,255,255,0.04); border:1px solid var(--border-color); color:var(--text-secondary);">
+          ${velocity.isCashflowPositive ? '🟢 Surplus Run-Rate' : '🟡 Deficit Velocity'}
+        </span>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:16px;">
+        <div>
+          <div style="font-size:11px; color:var(--text-secondary); text-transform:uppercase; font-weight:600;">Daily Burn Rate</div>
+          <div style="font-size:18px; font-weight:700; color:var(--text-primary); margin-top:2px;">
+            ${formatCurrency(velocity.dailyAverageSpendMinor)} <span style="font-size:12px; font-weight:500; color:var(--text-secondary);">/ day</span>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:11px; color:var(--text-secondary); text-transform:uppercase; font-weight:600;">Projected Month Spend</div>
+          <div style="font-size:18px; font-weight:700; color:var(--text-primary); margin-top:2px;">
+            ${formatCurrency(projection.projectedMonthEndMinor)}
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:11px; color:var(--text-secondary); text-transform:uppercase; font-weight:600;">Cashflow Runway</div>
+          <div style="font-size:18px; font-weight:700; color:${velocity.isCashflowPositive ? '#10B981' : '#F59E0B'}; margin-top:2px;">
+            ${velocity.isCashflowPositive ? 'Indefinite (Positive)' : `${velocity.runwayDays} days`}
+          </div>
+        </div>
+      </div>
+
+      ${atRiskBudgets.length > 0 ? `
+        <div style="margin-top:14px; padding-top:12px; border-top:1px dashed rgba(255,255,255,0.08); font-size:11px; color:var(--text-secondary);">
+          <span style="color:#F59E0B; font-weight:700;">⚠️ High Velocity Alert:</span>
+          ${atRiskBudgets.map(b => `${b.name} is at ${b.utilizationPct}% capacity (${formatCurrency(b.spentMinor)} / ${formatCurrency(b.limitMinor)})`).join(' · ')}
+        </div>
+      ` : ''}
     </div>
 
     <!-- Active Accounts & Budgets Row -->
