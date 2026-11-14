@@ -9,7 +9,7 @@
 ---
 
 ## 1. Executive Summary
-Phase 4 of Planrova 2.0 is fully implemented, verified, and integrated into both Web and Mobile platforms.
+Phase 4 of Planrova 2.0 is fully implemented, verified, hardened, and integrated into both Web and Mobile platforms.
 
 The application has been transformed into a unified **Academic and Professional Life Operating System** that connects:
 $$\text{Semester} \longrightarrow \text{Course} \longrightarrow \text{Syllabus} \longrightarrow \text{Topic} \longrightarrow \text{Assignment} \longrightarrow \text{Task} \longrightarrow \text{Schedule} \longrightarrow \text{Flashcards} \longrightarrow \text{GPA}$$
@@ -17,7 +17,7 @@ $$\text{Semester} \longrightarrow \text{Course} \longrightarrow \text{Syllabus} 
 All 11 implementation stages were executed sequentially without regressions:
 - **Baseline Test Suite:** 21 test files, 144 passing tests.
 - **Phase 4 Final Suite:** **31 test files, 214 passing tests (100% pass rate)**.
-- **Production Build:** Succeeded in 353ms with optimized dynamic code-splitting.
+- **Production Build:** Succeeded in ~370ms with optimized dynamic code-splitting.
 
 ---
 
@@ -45,7 +45,7 @@ All 11 implementation stages were executed sequentially without regressions:
 ### Stage 3: Syllabus & Hierarchical Topic Tracking
 - Authored `shared/domain/academic/syllabus.engine.js`:
   - Recursive tree building with branch rollups (time, total topics, completed topics, percentage).
-  - Two-way cascading: downward completion cascade and upward parent completion cascade.
+  - Two-way cascading: downward completion cascade and upward multi-level ancestor completion cascade (root to leaf and leaf to root across arbitrary depth).
   - Pedagogical next-topic recommendation engine prioritizing leaf topics and sequential order.
 - Verified in `tests/academicStage3.test.js` (5 passing tests).
 
@@ -54,28 +54,31 @@ All 11 implementation stages were executed sequentially without regressions:
   - Course weight validation (detects underweight, overweight, and complete configurations).
   - Detailed breakdown with drop-lowest policy support (e.g. drop lowest quiz).
   - What-if simulator: computes required percentage on remaining work and tests mathematical feasibility.
+  - Support for excused and pending assessments.
 - Verified in `tests/academicStage4.test.js` (5 passing tests).
 
 ### Stage 5: GPA Calculator & Target Simulator
 - Authored `shared/domain/academic/gpa.engine.js`:
   - Precision-safe credit-weighted SGPA and multi-semester cumulative CGPA.
+  - Honors course-specific grading scale overrides (`c.gradingScaleId`) before falling back to semester defaults.
   - Multi-semester target simulator computing uniform required SGPA across future semesters.
   - Identifies mathematically impossible targets and returns maximum achievable CGPA.
+  - Confirmed: strictly prohibits universal percentage-to-CGPA conversion; uses boundary mapping.
 - Verified in `tests/academicStage5.test.js` (4 passing tests).
 
 ### Stage 6: Assignment Dependency DAG Engine
 - Authored `shared/domain/academic/assignment-dependency.js`:
   - 3-color DFS cycle detection reporting exact cycle paths.
-  - Topological sorting (Kahn's algorithm).
+  - Topological sorting (Kahn's algorithm) with resilient handling for deleted/dangling prerequisite references (`ignoreDangling`).
   - Ready vs blocked state resolution based on prerequisite completion.
   - Critical path analysis using dynamic programming.
-  - Canonical task synchronization: updates assignment progress and marks completed when linked tasks complete.
+  - Canonical task synchronization: updates assignment progress and marks completed when linked tasks complete without recursive loop hazards.
 - Verified in `tests/academicStage6.test.js` (7 passing tests).
 
 ### Stage 7: Flashcards & Leitner Spaced Repetition
 - Authored `shared/domain/academic/spaced-repetition.engine.js`:
   - 5-box Leitner scheduling with 1, 2, 4, 7, and 14-day intervals.
-  - Rating processing (`Again`, `Hard`, `Good`, `Easy`) with box advancement, streak tracking, and review logs.
+  - Rating processing (`Again`, `Hard`, `Good`, `Easy`) with box advancement, streak tracking, Box 1 and Box 5 clamping, and review logs.
   - Due review queue generation prioritizing lower boxes and overdue cards.
   - Deck analytics: box distribution, average box, mastery percentage.
 - Verified in `tests/academicStage7.test.js` (7 passing tests).
@@ -108,19 +111,21 @@ All 11 implementation stages were executed sequentially without regressions:
 - **Mobile App (`mobile/src/screens/`):**
   - `AcademicScreen.js`: React Native screen with `useFirestoreData` sync, metrics cards, exams countdown, course list, add course modal.
   - Registered in `mobile/src/navigation/RootNavigator.js`.
+  - *Documented Distinction:* Web contains interactive 3D flashcard study player and modal GPA target simulator; Mobile delivers mobile-optimized dashboard metrics, course overviews, syllabus progress bars, and exam countdowns.
 
 ### Stage 11: Persistence, Security, Migrations & Release Verification
 - Verified Firestore multi-tenant security rules in `firestore.rules`.
 - Verified account isolation in `tests/academicStage11.test.js` (2 passing tests).
 - All 31 test suites passing: **214 / 214 tests**.
-- Production build succeeds in 353ms.
-- Authored 13 comprehensive technical specification documents in `docs/`.
+- Production build succeeds in ~370ms.
+- Authored comprehensive technical documentation in `docs/`.
 
 ---
 
 ## 3. Verification Artifacts & Test Logs
 - Baseline: `docs/PHASE_4_BASELINE.md`
 - Results: `docs/PHASE_4_TEST_RESULTS.md`
+- Final Audit: `docs/PHASE_4_FINAL_AUDIT.md`
 - Domain: `docs/ACADEMIC_DOMAIN_MODEL.md`
 - Workspaces: `docs/COURSE_WORKSPACES.md`
 - Syllabus: `docs/SYLLABUS_MANAGEMENT.md`
@@ -133,5 +138,4 @@ All 11 implementation stages were executed sequentially without regressions:
 - Technical Debt: `docs/TECHNICAL_DEBT.md`
 - Roadmap: `docs/ROADMAP.md`
 
-Phase 4 is complete, verified, and ready for production deployment.
-
+Phase 4 is complete, verified, hardened, and ready for release under documented platform boundaries.

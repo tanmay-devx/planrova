@@ -46,7 +46,10 @@ export function computeSemesterGPA({
       gradePoints = c.gradePoints;
       letter = c.letter || 'N/A';
     } else if (typeof c.scorePercent === 'number') {
-      const mapped = mapScoreToGradePoints(c.scorePercent, effectiveScale);
+      const courseScale = (c.gradingScaleId && DEFAULT_GRADING_SCALES[c.gradingScaleId])
+        ? DEFAULT_GRADING_SCALES[c.gradingScaleId]
+        : effectiveScale;
+      const mapped = mapScoreToGradePoints(c.scorePercent, courseScale);
       gradePoints = mapped.points;
       letter = mapped.letter;
     }

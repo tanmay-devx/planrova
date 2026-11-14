@@ -101,26 +101,33 @@ export function updateTopicMastery(topics = [], topicId, newMasteryLevel, { casc
     return t;
   });
 
-  // 2. Cascade upwards to parent if all siblings are mastered
-  const targetTopic = updatedTopics.find(t => String(t.id) === targetId);
-  const parentId = targetTopic ? (targetTopic.parentTopicId || targetTopic.parentId) : null;
+  // 2. Cascade upwards through all ancestors
+  let currentChildId = targetId;
+  let safetyCounter = 0;
 
-  if (parentId) {
+  while (safetyCounter < 50) {
+    safetyCounter++;
+    const currentTopic = updatedTopics.find(t => String(t.id) === currentChildId);
+    const pId = currentTopic ? (currentTopic.parentTopicId || currentTopic.parentId) : null;
+    if (!pId || String(pId) === currentChildId) break;
+
     const siblings = updatedTopics.filter(t => {
       const p = t.parentTopicId || t.parentId;
-      return p && String(p) === String(parentId);
+      return p && String(p) === String(pId);
     });
 
     const allSiblingsMastered = siblings.length > 0 && siblings.every(s => s.masteryLevel === TOPIC_MASTERY_LEVELS.MASTERED);
     const anySiblingLearning = siblings.some(s => s.masteryLevel === TOPIC_MASTERY_LEVELS.LEARNING || s.masteryLevel === TOPIC_MASTERY_LEVELS.MASTERED);
 
     updatedTopics = updatedTopics.map(t => {
-      if (String(t.id) === String(parentId)) {
+      if (String(t.id) === String(pId)) {
         let parentMastery = t.masteryLevel;
         if (allSiblingsMastered) {
           parentMastery = TOPIC_MASTERY_LEVELS.MASTERED;
         } else if (anySiblingLearning && parentMastery === TOPIC_MASTERY_LEVELS.UNSTARTED) {
           parentMastery = TOPIC_MASTERY_LEVELS.LEARNING;
+        } else if (!allSiblingsMastered && !anySiblingLearning) {
+          parentMastery = TOPIC_MASTERY_LEVELS.UNSTARTED;
         }
         return {
           ...t,
@@ -132,6 +139,8 @@ export function updateTopicMastery(topics = [], topicId, newMasteryLevel, { casc
       }
       return t;
     });
+
+    currentChildId = String(pId);
   }
 
   return updatedTopics;

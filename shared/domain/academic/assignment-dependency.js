@@ -93,10 +93,12 @@ export function validateAssignmentDAG(assignments = []) {
  * Topologically sorts assignments so prerequisites always precede dependents.
  * Returns sorted array of assignments.
  */
-export function topologicalSortAssignments(assignments = []) {
+export function topologicalSortAssignments(assignments = [], { ignoreDangling = true } = {}) {
   const validation = validateAssignmentDAG(assignments);
   if (!validation.valid) {
-    throw new Error(`Cannot topologically sort cyclic or invalid assignment DAG: ${validation.errors.join('; ')}`);
+    if (validation.hasCycles || !ignoreDangling) {
+      throw new Error(`Cannot topologically sort cyclic or invalid assignment DAG: ${validation.errors.join('; ')}`);
+    }
   }
 
   const active = (assignments || []).filter(a => a && !a.deleted);
