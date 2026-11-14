@@ -1,4 +1,4 @@
-# Technical Debt & Architecture Audit Log — Phase 4
+# Planrova 2.0 — Technical Debt & Architecture Audit Log
 
 ## 1. Overview
 As part of our commitment to transparent and zero-technical-debt engineering, this document logs all identified constraints, trade-offs, and future refactoring targets arising from the Phase 4 implementation and audit.

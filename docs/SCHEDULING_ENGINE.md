@@ -1,130 +1,87 @@
-# Adaptive Scheduling Engine Specification & Architecture
-**Planrova 2.0 — Phase 3 Domain Layer**
+# Planrova 2.0 — Adaptive Scheduling Engine
+
+**Author:** Principal Software Architect & Scheduling Algorithm Engineer  
+**Date:** 2026-11-14  
+**Document:** `docs/SCHEDULING_ENGINE.md`
 
 ---
 
 ## 1. Executive Summary
 
-The Planrova 2.0 Adaptive Scheduling Engine is a deterministic, explainable, multi-pass greedy heuristic scheduling algorithm that runs locally on web and mobile devices with zero external cloud or LLM dependencies. It allocates flexible tasks into optimal candidate time windows around fixed commitments (lectures, exams, locked blocks, and breaks) in sub-millisecond execution times.
+The Planrova 2.0 Adaptive Scheduling Engine (`shared/domain/scheduling/`) is a deterministic, explainable, multi-pass greedy heuristic scheduling algorithm that runs locally on Web and Mobile devices with zero external cloud or LLM dependencies. It allocates flexible tasks into optimal candidate time windows around fixed commitments (lectures, exams, locked blocks, and breaks) in sub-millisecond execution times.
 
 ---
 
-## 2. Architectural Design
+## 2. Architectural Pipeline
 
-```
-┌────────────────────────────────────────────────────────┐
-│                   Input Entities                       │
-│ (Tasks, Calendar Events, Timetable, User Availability)  │
-└──────────────────────────┬─────────────────────────────┘
-                           │
-                           ▼
-┌────────────────────────────────────────────────────────┐
-│               Availability Engine                      │
-│ - Materialize Timetable & Fixed Events                 │
-│ - Reserve Lunch Break & Calculate Free Intervals       │
-└──────────────────────────┬─────────────────────────────┘
-                           │
-                           ▼
-┌────────────────────────────────────────────────────────┐
-│               Task Prioritization Queue                │
-│ - Deadline Urgency (Multi-day chronologically comp)    │
-│ - Priority Rank (Urgent: 4, High: 3, Med: 2, Low: 1)   │
-│ - Duration & Creation Tie-Breakers                     │
-└──────────────────────────┬─────────────────────────────┘
-                           │
-                           ▼
-┌────────────────────────────────────────────────────────┐
-│             Candidate Slot Scoring Engine              │
-│ - Preferred Focus Match (40%)                          │
-│ - Contiguity Bonus (30%)                               │
-│ - Buffer Proximity (20%)                               │
-│ - Earliness Preference (10%)                           │
-│ - Residual Fragmentation Penalty (Up to 25 pts)        │
-└──────────────────────────┬─────────────────────────────┘
-                           │
-                           ▼
-┌────────────────────────────────────────────────────────┐
-│           Workload & Smart Buffer Engine               │
-│ - Flexible Capacity & Utilization Calculation          │
-│ - Cognitive Load & Fatigue Risk Assessment             │
-│ - Transition & Exam Prep Buffers                       │
-└──────────────────────────┬─────────────────────────────┘
-                           │
-                           ▼
-┌────────────────────────────────────────────────────────┐
-│           Immutable ScheduleProposal Output            │
-│ (Proposed Blocks, Workload, Unscheduled Tasks, Hash)   │
-└────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A["Input Data Stream<br/>(Tasks, Events, Timetable, Availability)"] --> B["Availability Engine<br/>(Materialize Fixed Commitments & Breaks)"]
+    B --> C["Task Prioritization Queue<br/>(Urgency, Priority Rank, Tie-Breakers)"]
+    C --> D["Candidate Slot Scoring Engine<br/>(Multi-Factor Heuristic Match)"]
+    D --> E["Workload & Capacity Engine<br/>(Flexible Utilization & Cognitive Load)"]
+    E --> F["Proposal Snapshot Hash & Freshness Validation"]
+    F --> G["Immutable ScheduleProposal Output<br/>(Proposed Blocks, Unscheduled Tasks)"]
 ```
 
 ---
 
-## 3. Calibrated Scoring Model
+## 3. Availability & Calendar Engine
 
-### Task Urgency & Prioritization
-Task selection is decoupled from slot suitability. The queue is ordered by `totalRankScore`:
-$$\text{totalRankScore} = \text{urgencyScore} + (\text{priorityRank} \times 10)$$
-
-Where:
-- **Urgency Score**:
-  - Overdue ($< 0$ min): $100$ pts
-  - Due today ($\le 1440$ min): $60$ pts
-  - Due tomorrow ($\le 2880$ min): $35$ pts
-  - Due in 2 days ($\le 4320$ min): $20$ pts
-  - Due later: $10$ pts
-  - No deadline: $0$ pts
-- **Priority Rank**:
-  - `urgent`: $4 \times 10 = 40$ pts
-  - `high`: $3 \times 10 = 30$ pts
-  - `medium`: $2 \times 10 = 20$ pts
-  - `low`: $1 \times 10 = 10$ pts
-
-**Deterministic Tie-Breakers:**
-1. `totalRankScore` DESC
-2. `deadlineMinutes` ASC
-3. `priorityRank` DESC
-4. `estimatedMinutes` DESC (longer tasks first to minimize bin fragmentation)
-5. `createdAt` ASC
-6. `id` String locale comparison ASC
-
-### Slot Suitability Scoring (Weights Strictly Summing to 100)
-For each candidate free slot:
-1. **Preferred Focus Match ($40\%$)**: Proportional overlap with user's configured focus hours (e.g. 10:00–12:00).
-2. **Contiguity Bonus ($30\%$)**: Placement abutting existing blocks or breaks to prevent scattered micro-gaps.
-3. **Buffer Proximity ($20\%$)**: Adequate spacing leaving at least 10–15m transition buffer around commitments.
-4. **Earliness Preference ($10\%$)**: Linear scaling favoring earlier placement during high-energy morning hours.
-5. **Fragmentation Penalty ($-25$ pts max)**: Severe deduction if placing the task leaves an unusable orphan gap $< \text{minSessionMinutes}$ (25–30 min).
+The Availability Engine (`availability.engine.js`) constructs daily working intervals:
+1. **Materialization of Timetable Entries:** Recurring class periods and lab blocks are expanded into fixed calendar events for each day of the scheduling horizon.
+2. **Fixed Commitment Subtraction:** Any immovable calendar event (lecture, meeting, doctor appointment) is subtracted from the user's configured working hours.
+3. **Reserved Break Allocation:** Dedicated lunch and dinner windows (e.g. 12:30–13:30, 19:30–20:30) are pre-allocated as unavailable time blocks.
+4. **Free Interval Extraction:** The remaining contiguous windows represent available candidate slots for flexible task scheduling.
 
 ---
 
-## 4. Task Splitting Strategy
+## 4. Candidate Slot Suitability Scoring
 
-When a task duration exceeds available slot capacities or $\text{maxSessionMinutes}$ (e.g. 120m):
-- If `task.allowSplit === true` AND global `preferences.allowTaskSplitting === true`:
-  - Splits task into $\text{Part 1}$ and $\text{Part 2}$ sessions.
-  - Enforces $\text{partDuration} \ge \text{minSessionMinutes}$.
-  - Generates stable, deterministic block IDs:
-    `sb_${taskId}_p1` and `sb_${taskId}_p2`.
-  - Sets `splitInfo: { part, totalParts, parentTaskId }`.
-  - Links both blocks to canonical task `t.id` in `t.scheduledSessions`.
+For each candidate time slot, the engine evaluates suitability using normalized multi-factor scoring (Total = 100 points):
 
----
+$$\text{SuitabilityScore} = S_{\text{focus}} + S_{\text{contiguity}} + S_{\text{proximity}} + S_{\text{earliness}} - P_{\text{fragmentation}}$$
 
-## 5. Performance Benchmarks
-
-Measured on standard commodity Linux hardware (50 iterations per scale):
-- **10 Tasks**: $0.173\text{ ms}$ (Target: $< 5\text{ ms}$)
-- **50 Tasks**: $0.153\text{ ms}$ (Target: $< 15\text{ ms}$)
-- **100 Tasks**: $0.207\text{ ms}$ (Target: $< 25\text{ ms}$)
-- **250 Tasks**: $0.346\text{ ms}$ (Target: $< 60\text{ ms}$)
-
-Zero recursion, zero memory leaks, sub-millisecond execution.
+| Component | Weight | Scoring Logic |
+| :--- | :---: | :--- |
+| **Preferred Focus Match ($S_{\text{focus}}$)** | **40 pts** | Matches task tag/category with time-of-day preference (e.g. deep focus coding in morning, light administrative work in late afternoon). |
+| **Contiguity Bonus ($S_{\text{contiguity}}$)** | **30 pts** | Rewards placing tasks adjacent to existing work sessions of similar context, minimizing context-switching penalties. |
+| **Buffer Proximity ($S_{\text{proximity}}$)** | **20 pts** | Ensures adequate transition buffers (minimum 10 minutes) around exams and high-cognitive commitments. |
+| **Earliness Preference ($S_{\text{earliness}}$)** | **10 pts** | Slight linear preference for earlier slots in the day to prevent procrastination drift. |
+| **Fragmentation Penalty ($P_{\text{fragmentation}}$)** | **Up to -25 pts** | Penalizes leaving useless micro-gaps ($<15$ mins) between scheduled blocks. |
 
 ---
 
-## 6. Known Limitations & NP-Hard Tradeoffs
+## 5. Workload Modeling & Flexible Capacity Utilization
 
-Interval allocation with multi-variable constraints (deadlines, preferred focus, splitting, fixed commitments) is a generalized variant of the NP-hard Knapsack and Bin-Packing problem. This engine employs an explainable, deterministic greedy heuristic with lookahead candidate evaluation:
-- **Trade-off**: Guarantees ultra-fast ($< 1\text{ ms}$) execution and explainable reasons for every decision, but does not claim global combinatorial optimality across edge-case combinations.
-- **Handling**: When greedy placement cannot fit lower-priority tasks into remaining tight gaps, tasks are never dropped silently; they are explicitly returned in `unscheduledTasks` with clear explanations and suggested date adjustments.
+The workload engine (`workload.model.js`) evaluates whether a user's day is realistically achievable:
 
+### 5.1 Flexible Capacity Formula
+$$\text{FlexibleCapacity} = \text{AvailableWorkingMinutes} - \text{FixedCommitmentMinutes} - \text{ReservedBreakMinutes}$$
+
+### 5.2 Utilization Ratio
+$$\text{Utilization} = \frac{\text{ScheduledFlexibleMinutes}}{\text{FlexibleCapacity}}$$
+
+### 5.3 Workload Classification Thresholds
+- **Underutilized ($\text{Utilization} < 0.60$):** Capacity remains to schedule additional backlog tasks.
+- **Balanced ($0.60 \le \text{Utilization} \le 0.85$):** Ideal working cadence with healthy cognitive breathing room.
+- **Heavy ($0.85 < \text{Utilization} \le 1.00$):** Full day; high focus required; warning emitted against adding extra commitments.
+- **Overloaded ($\text{Utilization} > 1.00$):** Infeasible schedule. Tasks exceeding capacity are displaced to the unscheduled backlog with an explanation.
+
+---
+
+## 6. Split-Task Persistence & Rescheduling
+
+Long tasks (e.g. 180-minute term paper preparation) frequently cannot fit into a single contiguous open slot:
+1. **Decomposition:** Long tasks are split into linked sub-blocks (`splitSourceTaskId`, `splitIndex`, `totalSplits`).
+2. **Sequential Placement:** Split blocks are placed sequentially across candidate slots, preserving minimum block duration thresholds ($\ge 30$ mins).
+3. **Rescheduling:** If a user completes, reschedules, or deletes a sub-block, sibling blocks adjust dynamically while preserving the parent deliverable's total scheduled time.
+
+---
+
+## 7. Proposal Versioning & Snapshot Freshness
+
+To prevent accepting stale proposals computed against out-of-date calendar state:
+1. **Deterministic Input Snapshot:** All scheduling inputs (active tasks, calendar events, availability hours, preferences) are serialized into a canonical representation.
+2. **Snapshot Hashing:** Generates a deterministic hash string (`snapshotHash`).
+3. **Pre-Acceptance Freshness Check:** When the user clicks "Accept Proposal", the engine recalculates the live input hash. If any input has changed, the proposal is flagged as stale and recomputed before committing mutations.

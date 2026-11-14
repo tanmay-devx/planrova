@@ -1,18 +1,24 @@
 # Planrova 2.0 — System Architecture
 
+**Author:** Principal Software Architect, Senior Full-Stack Engineer, Distributed Systems Engineer  
+**Date:** 2026-11-14  
+**Document:** `docs/ARCHITECTURE.md`
+
+---
+
 ## 1. High-Level Architecture Overview
 
-Planrova uses a **distributed, local-first hybrid architecture** comprising:
-1. **Desktop Web Application:** Built with Vanilla ES6 modules, Vite, and Dexie.js (IndexedDB). Zero virtual DOM overhead for high performance and low battery consumption.
-2. **Mobile Companion (Android / iOS):** Built with React Native 0.81 and Expo SDK 54, integrating custom native Kotlin bridges for hardware-level alarm management.
-3. **Backend OCR Proxy:** A zero-dependency Node.js HTTP/HTTPS server providing sliding-window rate limiting and secure credential isolation for Groq Multimodal Vision LLM requests.
-4. **Cloud Persistence & Realtime Layer:** Google Cloud Firestore and Firebase Authentication for multi-device synchronization and public directory discovery.
+Planrova 2.0 uses a **distributed, local-first hybrid architecture** engineered for zero-latency interactions, multi-platform continuity, and absolute offline resilience.
 
 ```mermaid
 graph TD
     subgraph "Clients"
-        Web["Planrova Web<br/>(ES6 + Vite + Dexie.js v2)"]
+        Web["Planrova Web<br/>(ES6 + Vite + Dexie.js)"]
         Mobile["Planrova Mobile<br/>(React Native 0.81 + Expo 54)"]
+    end
+
+    subgraph "Shared Platform-Independent Domain"
+        Domain["shared/domain/<br/>(Academic, Finance, Wellbeing, Scheduling, AI, Capture)"]
     end
 
     subgraph "Android Native Subsystem"
@@ -23,103 +29,134 @@ graph TD
         BootReceiver["BootReceiver<br/>(RECEIVE_BOOT_COMPLETED)"]
     end
 
-    subgraph "Cloud Backend"
-        Proxy["Planrova OCR Proxy<br/>(Node.js + Rate Limiting)"]
-        Groq["Groq Vision API<br/>(Meta LLaMA Vision)"]
-        Firestore["Cloud Firestore<br/>(/users/{uid}/appData)"]
-        FirebaseAuth["Firebase Authentication<br/>(Email & Password)"]
+    subgraph "Backend Proxy (Zero Dependencies)"
+        Proxy["Planrova Backend Proxy<br/>(Node.js HTTP on :3001)"]
+        AuthGate["Bearer Token Verification<br/>(Firebase ID Token Gatekeeper)"]
+        RateLimit["Dual Rate Limiter<br/>(20 req/min IP + 30 req/day User)"]
+        Upstream["Groq LLaMA 3.1 & Vision LLM"]
     end
 
-    Web <-->|Bidirectional SyncEngine + Tombstones| Firestore
+    subgraph "Cloud Persistence & Realtime Layer"
+        Firestore["Google Cloud Firestore<br/>(/users/{userId}/**)"]
+        FirebaseAuth["Firebase Authentication<br/>(Email / Password)"]
+    end
+
+    Web --> Domain
+    Mobile --> Domain
+    Web <-->|SyncEngine + Tombstones| Firestore
     Web <-->|Auth Tokens| FirebaseAuth
-    Mobile <-->|useFirestoreData Hook| Firestore
-    Mobile <-->|Auth Persistence| FirebaseAuth
+    Mobile <-->|Hooks + Async Storage| Firestore
+    Mobile <-->|Auth Tokens| FirebaseAuth
     Mobile <-->|Native Modules| KotlinBridge
     KotlinBridge --> AlarmMgr
     KotlinBridge --> ForeService
     KotlinBridge --> Sensors
     BootReceiver --> AlarmMgr
-    Mobile -->|Base64 Image Payload| Proxy
-    Proxy -->|Bearer Token Auth| Groq
+    Web -->|Bearer Token + Prompt| Proxy
+    Mobile -->|Bearer Token + Base64| Proxy
+    Proxy --> AuthGate
+    AuthGate --> RateLimit
+    RateLimit --> Upstream
 ```
 
 ---
 
-## 2. Web Architecture
+## 2. Platform Breakdown
 
-### Module Separation & Initialization
-- **Entry Point:** [src/main.js](file:///home/tanmay/Videos/planrova/src/main.js) evaluates CSS variables, checks authentication state (`onAuthStateChanged`), loads memory cache from IndexedDB via `preloadCache()`, and initializes modular sub-systems in safe `try/catch` boundaries.
-- **State Management:** Hybrid three-tier state architecture:
-  1. *L1 (In-Memory Cache):* Fast, synchronous JavaScript `Map` inside [storage.js](file:///home/tanmay/Videos/planrova/src/utils/storage.js) guaranteeing $O(1)$ zero-latency UI reads.
-  2. *L2 (Durable Local Storage):* IndexedDB managed by `Dexie.js` ([database.js](file:///home/tanmay/Videos/planrova/src/db/database.js)) for offline durability up to gigabytes of data.
-  3. *L3 (Cloud Synchronization):* Asynchronous replication to Cloud Firestore via [syncEngine.js](file:///home/tanmay/Videos/planrova/src/db/syncEngine.js).
-- **Event Bus:** Decoupled inter-module communication using custom DOM window events:
-  - `planrova:data_changed`: Dispatched on local writes or cloud pulls.
-  - `planrova:cloud_update`: Dispatched when Firestore pushes newer data.
-  - `planrova:sync_status`: Dispatched on sync transitions (`idle`, `syncing`, `synced`, `error`, `offline`).
+### 2.1 Web Client (Desktop / Laptop / Tablet)
+- **Runtime:** Vanilla ES6 Modules (No React, Vue, or heavy framework overhead).
+- **Bundler:** Vite 8.0.x with custom Rollup manual chunking.
+- **Rendering Performance:** Direct DOM rendering guarantees sub-second initial paint, minimal battery drain, and $60\text{ FPS}$ fluid canvas animations.
+- **PWA Capabilities:** Service worker caching, offline asset serving, and manifest for installable standalone desktop app.
 
-### PWA Offline Behavior & Service Worker
-- **Service Worker:** [public/sw.js](file:///home/tanmay/Videos/planrova/public/sw.js) implements Cache-First strategy for static assets (`/`, `/index.html`, `/favicon.ico`, `/icons.svg`, `/site.webmanifest`).
-- **Offline Fallback:** Navigation requests intercepted and served from `/index.html` cache when offline.
+### 2.2 Mobile Client (Android & iOS)
+- **Runtime:** React Native 0.81.x with Expo SDK 54 (Managed + Continuous Native Generation).
+- **Navigation:** React Navigation 7.x stack and tab navigators.
+- **Screens:** `TasksScreen`, `CalendarScreen`, `PomodoroScreen`, `AcademicScreen`, `FinanceScreen`, `WellbeingScreen`, `AIAssistantScreen`.
+- **Hardware Integration:** Android Kotlin native module utilizing `AlarmManager.setExactAndAllowWhileIdle` and foreground services for unkillable mission alarms.
 
----
+### 2.3 Shared Domain Layer (`shared/domain/`)
+All core computational logic is isolated into pure JavaScript modules completely decoupled from DOM manipulation, React Native UI components, or vendor databases:
+- `shared/domain/academic/`: Course workspaces, syllabus trees, grading engines, GPA simulators, assignment DAGs, Leitner flashcard review.
+- `shared/domain/finance/`: Integer minor units, account reconciliation, budget pacing, recurring subscriptions, savings goals.
+- `shared/domain/wellbeing/`: Habit streaks, millilitre hydration tracking, ordered routines, reflection check-ins.
+- `shared/domain/scheduling/`: Availability engine, candidate slot suitability scoring, workload modeling, snapshot freshness hashing.
+- `shared/domain/ai/`: Opt-in permission engine, context minimization, anti-prompt injection, proposal dispatcher, local mock & proxy providers.
+- `shared/domain/capture/`: Universal Quick Capture natural language parser and intent classifier.
 
-## 3. Android Native Architecture
-
-### Expo & Kotlin Bridge Integration
-- **React Native Framework:** React Native 0.81.5 with Expo 54 in Bare / Custom Native module mode.
-- **AlarmModule (`AlarmModule.kt`):** Native module exposed to React Native via `@ReactMethod`:
-  - `getAlarms()`: Reads scheduled alarms from `SharedPreferences`.
-  - `saveAlarms(alarmsJson)`: Persists alarms and triggers background rescheduling.
-  - `stopRinging()`: Halts active ringing audio and tears down `AlarmService`.
-  - `snoozeAlarm(alarmId, snoozeMinutes)`: Reschedules exact alarm offset by snooze interval.
-  - `checkPermissions()`: Verifies `SCHEDULE_EXACT_ALARM`, `POST_NOTIFICATIONS`, and battery optimization exclusions (`isIgnoringBatteryOptimizations`).
-
-### Exact Alarms & Doze Mode Survival
-- Uses `AlarmManager.setExactAndAllowWhileIdle()` to guarantee execution even when Android puts the device into deep Doze mode.
-- `AlarmReceiver.kt` catches the pending intent, acquires a temporary partial `WakeLock`, and launches `AlarmService.kt` as an active foreground service (`foregroundServiceType="mediaPlayback"`).
-- `AlarmActivity.kt` is launched with `showWhenLocked="true"` and `turnScreenOn="true"` to display mission challenges (math, steps, shake) over the lock screen.
-- `BootReceiver.kt` registers for `android.intent.action.BOOT_COMPLETED` and `MY_PACKAGE_REPLACED` to re-register all exact alarms across system reboots without requiring user interaction.
+### 2.4 Backend Proxy (`server/proxy.js`)
+A lightweight, zero-npm-dependency Node.js HTTP server running on port 3001:
+- Isolates upstream AI credentials (`GROQ_API_KEY`) so secrets never touch client devices.
+- Authenticates client calls via `verifyFirebaseToken()` using Firebase ID tokens.
+- Enforces sliding-window rate limits: 20 requests per minute per IP, and 30 requests per 24 hours per verified user.
+- Enforces payload bounds ($\le 5000$ chars prompt, $\le 8000$ chars context).
 
 ---
 
-## 4. Backend Architecture (OCR Vision Proxy)
+## 3. Data Flow & Three-Tier Caching Architecture
 
-- **Runtime:** Node.js HTTP/HTTPS server ([server/proxy.js](file:///home/tanmay/Videos/planrova/server/proxy.js)) operating on port 3001.
-- **Authentication Isolation:** The Groq API key resides exclusively on the server in `.env`. Mobile and web clients forward only image payloads; credentials never touch client binaries.
-- **Rate Limiting:** Built-in sliding-window limiter enforcing 20 scans per minute per client IP, returning standard `429 Too Many Requests` with `X-RateLimit-*` headers upon abuse.
-- **Payload Validation:** Restricts request body size to 15MB, validates JSON schema and ensures non-empty prompt message arrays.
+Planrova implements a three-tier local-first storage hierarchy:
+
+```
+[UI Reads / Writes]
+       │
+       ▼ (Sub-millisecond)
+┌────────────────────────────────────────────────────────┐
+│  Tier 1: In-Memory Cache (storage.js)                   │
+│  - Synchronous JavaScript Map                          │
+│  - O(1) zero-latency reads & writes                    │
+└──────────────────────────┬─────────────────────────────┘
+                           │
+                           ▼ (Asynchronous IndexedDB)
+┌────────────────────────────────────────────────────────┐
+│  Tier 2: Durable Local Storage (Dexie.js IndexedDB)    │
+│  - Persistent local database (PlanrovaLocalDB v1)      │
+│  - Survives browser restarts & offline sessions        │
+│  - Namespaced by userId (planrova_{domain}_{userId})   │
+└──────────────────────────┬─────────────────────────────┘
+                           │
+                           ▼ (Background Synchronization)
+┌────────────────────────────────────────────────────────┐
+│  Tier 3: Cloud Firestore & Realtime Layer              │
+│  - Replicated under /users/{userId}/**                 │
+│  - Bidirectional sync with vector tombstones           │
+│  - Last-Write-Wins (LWW) conflict resolution           │
+└────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## 5. Database Architecture & Synchronization
+## 4. Production Bundle Architecture & Code-Splitting
 
-### Dexie Schema Versions
+Production builds are optimized via Vite and Rollup manual chunking in `vite.config.js`:
+
 ```javascript
-// Version 1 (Legacy)
-localDB.version(1).stores({
-  kv_store: 'id, sync_status, updated_at'
-});
-
-// Version 2 (Planrova 2.0 Hardened)
-localDB.version(2).stores({
-  kv_store: 'id, sync_status, updated_at, user_id, retry_count'
-}).upgrade(tx => {
-  return tx.table('kv_store').toCollection().modify(record => {
-    if (!record.user_id) record.user_id = 'local';
-    if (typeof record.retry_count !== 'number') record.retry_count = 0;
-  });
-});
+build: {
+  chunkSizeWarningLimit: 600,
+  rollupOptions: {
+    output: {
+      manualChunks(id) {
+        if (id.includes('@firebase') || id.includes('firebase/')) {
+          return 'vendor-firebase';
+        }
+      }
+    }
+  }
+}
 ```
 
-### Conflict Resolution & Deletion Semantics
-- **Single Values:** Last-Write-Wins (LWW) based on `updated_at` millisecond timestamp.
-- **Collections (`tasks`, `habits`, `notes`, `expenses`, `brain_dump`):**
-  - Unique ID indexing (`id` or `date`).
-  - **Tombstones:** Deleted items maintain `deleted: true`. During cloud conflict merging, tombstones prevent deleted records from resurrecting when merged with older cloud snapshots.
-  - **Completion Preservation:** If an item is marked `completed: true` in either local or cloud snapshot, completion status is retained.
-- **Progression Metrics:**
-  - `gamification`: Retains $\max(\text{local.level}, \text{cloud.level})$ and $\max(\text{local.xp}, \text{cloud.xp})$.
-  - `focus_coins`: Retains $\max(\text{local.coins}, \text{cloud.coins})$.
-  - `unlocked_seeds`: Computes set union $\text{local} \cup \text{cloud}$.
+### Measured Production Chunks
+| Asset / Chunk | Size | Gzip | Loading Mechanism |
+| :--- | :--- | :--- | :--- |
+| `dist/assets/index-*.js` | **139.16 kB** | 39.82 kB | Main entry application chunk |
+| `dist/assets/vendor-firebase-*.js` | **411.91 kB** | 124.14 kB | Preloaded vendor chunk (`<link rel="modulepreload">`) |
+| `dist/assets/database-*.js` | **95.78 kB** | 31.57 kB | Dexie IndexedDB sub-chunk |
+| `dist/assets/academic.ui-*.js` | **40.75 kB** | 7.88 kB | Lazy-loaded on demand when entering Academic Workspace |
+| `dist/assets/finance.ui-*.js` | **17.11 kB** | 4.13 kB | Lazy-loaded on demand when entering Finance Workspace |
+| `dist/assets/wellbeing.ui-*.js` | **12.06 kB** | 3.46 kB | Lazy-loaded on demand when entering Wellbeing Workspace |
+| `dist/assets/ai.ui-*.js` | **15.53 kB** | 4.46 kB | Lazy-loaded on demand when opening AI Assistant |
 
+### Cold Load vs. Subsequent Load Network Transfer
+- **Cold First Visit (Uncached):** Approximately **840 kB uncompressed** (~250 kB gzipped) is downloaded because Firebase Auth initializes on app boot.
+- **Subsequent Visits (Cached):** The immutable 412 kB `vendor-firebase` chunk is served from browser cache. Application updates only require fetching the 139 kB entry chunk.
+- **Workspace Isolation:** None of the heavy feature workspace bundles (`academic.ui`, `finance.ui`, `wellbeing.ui`, `ai.ui`) are loaded until the user explicitly navigates to them.
