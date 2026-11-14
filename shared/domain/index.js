@@ -29,3 +29,8 @@ export * from './scheduling/index.js';
 // Academic Domain
 export * from './academic/index.js';
 
+// Finance Domain
+export * from './finance/index.js';
+
+// Wellbeing Domain
+export * from './wellbeing/index.js';

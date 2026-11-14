@@ -168,11 +168,13 @@ function setupGeneralUI() {
     });
   }
 
-  // View switches (Weekly Timetable vs Dedicated Month Calendar vs Focus Forest vs Social Studypool vs Today Plan vs Academic)
+  // View switches (Weekly Timetable vs Dedicated Month Calendar vs Focus Forest vs Social Studypool vs Today Plan vs Academic vs Finance vs Wellbeing)
   const viewWeeklyBtn = document.getElementById('view-weekly-btn');
   const viewCalendarBtn = document.getElementById('view-calendar-btn');
   const viewPlanBtn = document.getElementById('view-plan-btn');
   const viewAcademicBtn = document.getElementById('view-academic-btn');
+  const viewFinanceBtn = document.getElementById('view-finance-btn');
+  const viewWellbeingBtn = document.getElementById('view-wellbeing-btn');
   const viewForestBtn = document.getElementById('sidebar-nav-forest');
   const viewStudypoolBtn = document.getElementById('sidebar-nav-studypool');
   
@@ -180,6 +182,8 @@ function setupGeneralUI() {
   const monthlyCalendar = document.getElementById('monthly-calendar-view');
   const todayPlanView = document.getElementById('today-plan-view');
   const academicWorkspaceView = document.getElementById('academic-workspace-view');
+  const financeWorkspaceView = document.getElementById('finance-workspace-view');
+  const wellbeingWorkspaceView = document.getElementById('wellbeing-workspace-view');
   const forestView = document.getElementById('forest-garden-view');
   const studypoolView = document.getElementById('studypool-view');
 
@@ -188,10 +192,12 @@ function setupGeneralUI() {
     if (monthlyCalendar) monthlyCalendar.classList.add('hidden');
     if (todayPlanView) todayPlanView.classList.add('hidden');
     if (academicWorkspaceView) academicWorkspaceView.classList.add('hidden');
+    if (financeWorkspaceView) financeWorkspaceView.classList.add('hidden');
+    if (wellbeingWorkspaceView) wellbeingWorkspaceView.classList.add('hidden');
     if (forestView) forestView.classList.add('hidden');
     if (studypoolView) studypoolView.classList.add('hidden');
 
-    [viewWeeklyBtn, viewCalendarBtn, viewPlanBtn, viewAcademicBtn, viewForestBtn, viewStudypoolBtn].forEach(btn => {
+    [viewWeeklyBtn, viewCalendarBtn, viewPlanBtn, viewAcademicBtn, viewFinanceBtn, viewWellbeingBtn, viewForestBtn, viewStudypoolBtn].forEach(btn => {
       if (btn) btn.classList.remove('active');
     });
 
@@ -211,6 +217,14 @@ function setupGeneralUI() {
       if (academicWorkspaceView) academicWorkspaceView.classList.remove('hidden');
       if (viewAcademicBtn) viewAcademicBtn.classList.add('active');
       import('./modules/academic/academic.ui.js').then(m => m.renderAcademicWorkspace());
+    } else if (viewId === 'finance') {
+      if (financeWorkspaceView) financeWorkspaceView.classList.remove('hidden');
+      if (viewFinanceBtn) viewFinanceBtn.classList.add('active');
+      import('./modules/finance/finance.ui.js').then(m => m.initFinanceWorkspace());
+    } else if (viewId === 'wellbeing') {
+      if (wellbeingWorkspaceView) wellbeingWorkspaceView.classList.remove('hidden');
+      if (viewWellbeingBtn) viewWellbeingBtn.classList.add('active');
+      import('./modules/wellbeing/wellbeing.ui.js').then(m => m.initWellbeingWorkspace());
     } else if (viewId === 'forest') {
       if (forestView) forestView.classList.remove('hidden');
       if (viewForestBtn) viewForestBtn.classList.add('active');
@@ -236,6 +250,12 @@ function setupGeneralUI() {
   }
   if (viewAcademicBtn) {
     viewAcademicBtn.addEventListener('click', () => switchMainView('academic'));
+  }
+  if (viewFinanceBtn) {
+    viewFinanceBtn.addEventListener('click', () => switchMainView('finance'));
+  }
+  if (viewWellbeingBtn) {
+    viewWellbeingBtn.addEventListener('click', () => switchMainView('wellbeing'));
   }
   if (viewForestBtn) {
     viewForestBtn.addEventListener('click', () => switchMainView('forest'));

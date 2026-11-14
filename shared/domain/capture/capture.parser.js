@@ -3,7 +3,7 @@
  * Entity-Specific Field Extractor for Universal Quick Capture in Planrova 2.0
  */
 
-import { toMinorUnits } from '../entities/expense.schema.js';
+import { toMinorUnits } from '../finance/finance.utils.js';
 
 /**
  * Parses raw text into structured entity fields based on candidate type.
@@ -15,6 +15,16 @@ export function parseCapture(text = '', targetType = 'task', referenceDate = new
   switch (targetType) {
     case 'expense':
       return parseExpenseFields(raw, lower, referenceDate);
+    case 'income':
+      return parseIncomeFields(raw, lower, referenceDate);
+    case 'budget':
+      return parseBudgetFields(raw, lower, referenceDate);
+    case 'savings_goal':
+      return parseSavingsGoalFields(raw, lower, referenceDate);
+    case 'hydration':
+      return parseHydrationFields(raw, lower, referenceDate);
+    case 'routine':
+      return parseRoutineFields(raw, lower, referenceDate);
     case 'reminder':
       return parseReminderFields(raw, lower, referenceDate);
     case 'habit':
@@ -36,20 +46,17 @@ export function parseCapture(text = '', targetType = 'task', referenceDate = new
 
 // ── 1. EXPENSE PARSER ─────────────────────────────────────────────
 function parseExpenseFields(raw, lower, now) {
-  // Extract amount: e.g. "spent 150 on lunch", "₹250 for groceries", "bought book for 499 rs"
   let amount = 0;
   let currency = 'INR';
 
   if (raw.includes('$')) currency = 'USD';
   else if (raw.includes('€')) currency = 'EUR';
 
-  // Amount match
   const amtMatch = raw.match(/(?:₹|\$|€|rs\.?|rupees?)?\s*(\d+(?:\.\d{1,2})?)\s*(?:₹|\$|€|rs\.?|rupees?)?/i);
   if (amtMatch) {
     amount = parseFloat(amtMatch[1]);
   }
 
-  // Clean description
   let desc = raw
     .replace(/(?:spent|spend|bought|paid|cost|expense|kharcha|for|on|\$|₹|€|\brs\.?|\brupees?)/gi, '')
     .replace(/\b\d+(?:\.\d{1,2})?\b/g, '')
@@ -57,7 +64,6 @@ function parseExpenseFields(raw, lower, now) {
 
   if (!desc) desc = 'Quick Expense';
 
-  // Infer Category
   let category = 'Other';
   if (/food|lunch|dinner|breakfast|snack|chai|coffee|pizza|burger|swiggy|zomato|cafe/i.test(lower)) {
     category = 'Food';
@@ -87,7 +93,153 @@ function parseExpenseFields(raw, lower, now) {
   };
 }
 
-// ── 2. REMINDER PARSER ────────────────────────────────────────────
+// ── 2. INCOME PARSER ──────────────────────────────────────────────
+function parseIncomeFields(raw, lower, now) {
+  let amount = 0;
+  let currency = 'INR';
+
+  if (raw.includes('$')) currency = 'USD';
+  else if (raw.includes('€')) currency = 'EUR';
+
+  const amtMatch = raw.match(/(?:₹|\$|€|rs\.?|rupees?)?\s*(\d+(?:\.\d{1,2})?)\s*(?:₹|\$|€|rs\.?|rupees?)?/i);
+  if (amtMatch) {
+    amount = parseFloat(amtMatch[1]);
+  }
+
+  let desc = raw
+    .replace(/(?:received|receive|got|credited|salary|cashback|earned|income|kamaya|from|\$|₹|€|\brs\.?|\brupees?)/gi, '')
+    .replace(/\b\d+(?:\.\d{1,2})?\b/g, '')
+    .trim();
+
+  if (!desc) desc = 'Income';
+
+  const { date } = extractDate(raw, now);
+
+  return {
+    type: 'income',
+    amountMinor: toMinorUnits(amount),
+    amount,
+    currency,
+    title: desc,
+    description: desc,
+    date
+  };
+}
+
+// ── 3. BUDGET PARSER ──────────────────────────────────────────────
+function parseBudgetFields(raw, lower, now) {
+  let limit = 0;
+  let currency = 'INR';
+
+  if (raw.includes('$')) currency = 'USD';
+  else if (raw.includes('€')) currency = 'EUR';
+
+  const amtMatch = raw.match(/(?:₹|\$|€|rs\.?|rupees?)?\s*(\d+(?:\.\d{1,2})?)\s*(?:₹|\$|€|rs\.?|rupees?)?/i);
+  if (amtMatch) {
+    limit = parseFloat(amtMatch[1]);
+  }
+
+  const period = /weekly|week/i.test(lower) ? 'weekly' : 'monthly';
+
+  let category = 'Other';
+  if (/food|groceries|dining/i.test(lower)) category = 'Food';
+  else if (/transport|travel|fuel/i.test(lower)) category = 'Transport';
+  else if (/entertainment|movies|games/i.test(lower)) category = 'Entertainment';
+  else if (/shopping|clothes/i.test(lower)) category = 'Shopping';
+  else if (/study|books|education/i.test(lower)) category = 'Education';
+
+  return {
+    limitMinor: toMinorUnits(limit),
+    limit,
+    currency,
+    period,
+    category,
+    name: `${category} Budget`
+  };
+}
+
+// ── 4. SAVINGS GOAL PARSER ────────────────────────────────────────
+function parseSavingsGoalFields(raw, lower, now) {
+  let targetAmount = 0;
+  let currency = 'INR';
+
+  if (raw.includes('$')) currency = 'USD';
+  else if (raw.includes('€')) currency = 'EUR';
+
+  const amtMatch = raw.match(/(?:₹|\$|€|rs\.?|rupees?)?\s*(\d+(?:\.\d{1,2})?)\s*(?:₹|\$|€|rs\.?|rupees?)?/i);
+  if (amtMatch) {
+    targetAmount = parseFloat(amtMatch[1]);
+  }
+
+  let title = raw
+    .replace(/(?:save|savings|bachat|goal|for|every\s+month|monthly|every\s+week|weekly|\$|₹|€|\brs\.?|\brupees?)/gi, '')
+    .replace(/\b\d+(?:\.\d{1,2})?\b/g, '')
+    .trim();
+
+  if (!title) title = 'Savings Goal';
+
+  const contributionFrequency = /weekly|week/i.test(lower) ? 'weekly' : 'monthly';
+
+  return {
+    targetAmountMinor: toMinorUnits(targetAmount),
+    targetAmount,
+    currency,
+    title,
+    contributionFrequency
+  };
+}
+
+// ── 5. HYDRATION PARSER ───────────────────────────────────────────
+function parseHydrationFields(raw, lower, now) {
+  let amountMl = 250; // default glass
+
+  const match = lower.match(/(\d+)\s*(?:ml|milliliters?|liters?|l)\b/);
+  if (match) {
+    const val = parseFloat(match[1]);
+    if (/liters?|l\b/.test(match[0]) && !/ml|milliliters?/.test(match[0])) {
+      amountMl = Math.round(val * 1000);
+    } else {
+      amountMl = Math.round(val);
+    }
+  }
+
+  let beverageType = 'water';
+  if (/coffee/i.test(lower)) beverageType = 'coffee';
+  else if (/tea|chai/i.test(lower)) beverageType = 'tea';
+  else if (/juice/i.test(lower)) beverageType = 'juice';
+
+  const { date } = extractDate(raw, now);
+
+  return {
+    amountMl,
+    beverageType,
+    dateKey: date,
+    date
+  };
+}
+
+// ── 6. ROUTINE PARSER ─────────────────────────────────────────────
+function parseRoutineFields(raw, lower, now) {
+  let type = 'custom';
+  if (/morning/i.test(lower)) type = 'morning';
+  else if (/evening|night|wind\s*down/i.test(lower)) type = 'evening';
+  else if (/study/i.test(lower)) type = 'study_prep';
+  else if (/workout|exercise/i.test(lower)) type = 'workout';
+
+  let title = raw
+    .replace(/^(?:add\s+my\s+|create\s+|new\s+)?/i, '')
+    .trim();
+
+  if (!title) title = `${type.charAt(0).toUpperCase() + type.slice(1)} Routine`;
+
+  return {
+    title,
+    type,
+    estimatedDurationMinutes: 20
+  };
+}
+
+// ── 7. REMINDER PARSER ────────────────────────────────────────────
 function parseReminderFields(raw, lower, now) {
   const { date, textWithoutDate } = extractDate(raw, now);
   const { time, textWithoutTime } = extractTime(textWithoutDate);
@@ -103,177 +255,147 @@ function parseReminderFields(raw, lower, now) {
     title,
     dueDate: date,
     dueTime: time,
-    priority: /urgent|important|asap/i.test(lower) ? 'high' : 'medium'
+    priority: 'medium'
   };
 }
 
-// ── 3. HABIT PARSER ───────────────────────────────────────────────
+// ── 8. HABIT PARSER ───────────────────────────────────────────────
 function parseHabitFields(raw, lower, now) {
   let name = raw
-    .replace(/^(?:build\s+(?:a\s+)?habit|start\s+(?:a\s+)?habit|start|track)\s+/i, '')
-    .replace(/\b(?:every\s+(?:day|morning|evening|night)|daily|roz|har\s+din)\b/gi, '')
+    .replace(/^(?:start\s+|build\s+habit\s+to\s+|build\s+|make\s+a\s+habit\s+of\s+)/i, '')
+    .replace(/\b(?:every\s+(?:day|morning|evening|night|week)|daily|roz|har\s+din)\b/gi, '')
     .trim();
 
   if (!name) name = 'Daily Habit';
 
-  let icon = 'sparkles';
-  if (/read|book|pages/i.test(lower)) icon = 'book';
-  else if (/water|drink|hydrate/i.test(lower)) icon = 'water';
-  else if (/workout|exercise|gym|run|walk|yoga/i.test(lower)) icon = 'fitness';
-  else if (/meditat|mindful|breathe/i.test(lower)) icon = 'leaf';
-  else if (/code|program|dev/i.test(lower)) icon = 'code';
+  let frequencyType = 'daily';
+  if (/every\s+week|weekly/i.test(lower)) {
+    frequencyType = 'weekly';
+  } else if (/weekdays|somvaar\s+se\s+shukravaar/i.test(lower)) {
+    frequencyType = 'weekdays';
+  }
 
   return {
     name,
-    icon,
-    frequency: { type: 'daily', days: [] }
+    frequency: {
+      type: frequencyType,
+      days: []
+    }
   };
 }
 
-// ── 4. CALENDAR EVENT PARSER ──────────────────────────────────────
+// ── 9. CALENDAR EVENT PARSER ──────────────────────────────────────
 function parseCalendarEventFields(raw, lower, now) {
   const { date, textWithoutDate } = extractDate(raw, now);
   const { startTime, endTime, textWithoutTime } = extractTimeRange(textWithoutDate);
 
   let title = textWithoutTime
-    .replace(/\b(?:tomorrow|today|tonight|kal|parso|from|to|at|on)\b/gi, '')
+    .replace(/\b(?:tomorrow|today|tonight|kal|parso|at|from|to)\b/gi, '')
     .trim();
 
-  if (!title) title = 'Calendar Event';
-
-  let category = 'academic';
-  if (/meeting|sync|interview|client|standup/i.test(lower)) category = 'work';
-  else if (/party|dinner|birthday|movie/i.test(lower)) category = 'personal';
+  if (!title) title = 'Scheduled Event';
 
   return {
     title,
     date,
-    startTime: startTime || '10:00',
-    endTime: endTime || '11:00',
-    allDay: !startTime && !endTime,
-    category
+    startTime: startTime || '09:00',
+    endTime: endTime || '10:00',
+    location: ''
   };
 }
 
-// ── 5. NOTE PARSER ────────────────────────────────────────────────
+// ── 10. NOTE PARSER ───────────────────────────────────────────────
 function parseNoteFields(raw, lower, now) {
-  let text = raw
-    .replace(/^(?:note:|remember\s+that|summary:|definition:|key\s+point:)\s*/i, '')
+  let content = raw
+    .replace(/^(?:note:|remember\s+that|summary:|definition:|formula:|key\s+point:)/i, '')
     .trim();
 
-  // Extract a concise title from the first 5-8 words
-  const words = text.split(/\s+/).filter(Boolean);
-  const title = words.slice(0, 6).join(' ') || 'Quick Note';
-
-  let subject = 'General';
-  const tagMatch = raw.match(/\[([^\]]+)\]/);
-  if (tagMatch) {
-    subject = tagMatch[1].trim();
-  } else if (/physics/i.test(lower)) subject = 'Physics';
-  else if (/math/i.test(lower)) subject = 'Maths';
-  else if (/cs|code|dbms|os|algorithm/i.test(lower)) subject = 'CS101';
+  const lines = content.split('\n');
+  const title = lines[0].slice(0, 50) || 'Quick Note';
 
   return {
     title,
-    content: text,
-    text,
-    subject,
-    date: now.toISOString().split('T')[0]
+    content,
+    tags: []
   };
 }
 
-// ── 6. TASK PARSER ────────────────────────────────────────────────
+// ── 11. TASK PARSER ───────────────────────────────────────────────
 function parseTaskFields(raw, lower, now) {
   const { date, textWithoutDate } = extractDate(raw, now);
-  const { startTime, endTime, textWithoutTime } = extractTimeRange(textWithoutDate);
+  const { time, textWithoutTime } = extractTime(textWithoutDate);
+
+  let priority = 'medium';
+  if (/\b(?:urgent|important|priority|asap|zaroori)\b/i.test(lower)) {
+    priority = 'urgent';
+  } else if (/\b(?:low|chill|whenever|fursat)\b/i.test(lower)) {
+    priority = 'low';
+  }
 
   let title = textWithoutTime
-    .replace(/\b(?:tomorrow|today|tonight|kal|parso|at|by|before)\b/gi, '')
+    .replace(/\b(?:urgent|important|priority|asap|zaroori|low|chill|whenever)\b/gi, '')
+    .replace(/\b(?:tomorrow|today|tonight|kal|parso|by|before|at)\b/gi, '')
     .trim();
 
-  if (!title) title = 'Quick Task';
-
-  // Infer Priority
-  let priority = 'medium';
-  if (/urgent|asap|high\s+priority|critical/i.test(lower)) priority = 'urgent';
-  else if (/important|soon/i.test(lower)) priority = 'high';
-  else if (/low\s+priority|someday|optional/i.test(lower)) priority = 'low';
-
-  // Infer Category
-  let category = 'study';
-  if (/work|office|client|meeting|email|pr\b|deploy/i.test(lower)) category = 'work';
-  else if (/health|run|gym|walk|medicine|water/i.test(lower)) category = 'health';
-  else if (/finance|budget|bank|pay|bill/i.test(lower)) category = 'finance';
-  else if (/buy|shop|grocery|call|home|room/i.test(lower)) category = 'personal';
+  if (!title) title = raw;
 
   return {
     title,
     dueDate: date,
-    startTime: startTime || '',
-    endTime: endTime || '',
+    startTime: time,
     priority,
-    category
+    estimatedMinutes: 30
   };
 }
 
-// ── HELPERS: DATE & TIME EXTRACTION ──────────────────────────────
+// ── DATE & TIME EXTRACTION HELPERS ────────────────────────────────
 export function extractDate(text, now = new Date()) {
   const lower = text.toLowerCase();
-  const date = new Date(now);
-  let textWithoutDate = text;
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const day = now.getDate();
 
-  // Tomorrow / Kal
-  if (/\b(?:tomorrow|kal)\b/i.test(lower)) {
-    date.setDate(now.getDate() + 1);
-    textWithoutDate = textWithoutDate.replace(/\b(?:tomorrow|kal)\b/gi, '');
-  }
-  // Day after tomorrow / Parso
-  else if (/\b(?:day\s+after\s+tomorrow|parso)\b/i.test(lower)) {
-    date.setDate(now.getDate() + 2);
-    textWithoutDate = textWithoutDate.replace(/\b(?:day\s+after\s+tomorrow|parso)\b/gi, '');
-  }
-  // Next week
-  else if (/\bnext\s+week\b/i.test(lower)) {
-    date.setDate(now.getDate() + 7);
-    textWithoutDate = textWithoutDate.replace(/\bnext\s+week\b/gi, '');
-  }
-  // Days of week (mon..sun, somvar..ravivar)
-  else {
-    const daysMap = {
-      monday: 1, mon: 1, somvar: 1,
-      tuesday: 2, tue: 2, mangalvar: 2,
-      wednesday: 3, wed: 3, budhvar: 3,
-      thursday: 4, thu: 4, veerwar: 4, guruvar: 4,
-      friday: 5, fri: 5, shukravar: 5,
-      saturday: 6, sat: 6, shanivar: 6,
-      sunday: 0, sun: 0, ravivar: 0
-    };
-    for (const [dayName, dayIndex] of Object.entries(daysMap)) {
-      const regex = new RegExp(`\\b${dayName}\\b`, 'i');
-      if (regex.test(lower)) {
-        const currentDayIndex = now.getDay();
-        let diff = dayIndex - currentDayIndex;
-        if (diff <= 0) diff += 7;
-        date.setDate(now.getDate() + diff);
-        textWithoutDate = textWithoutDate.replace(regex, '');
-        break;
-      }
+  let targetDate = new Date(year, month, day);
+  let matchedStr = '';
+
+  if (/\b(?:today|aaj)\b/i.test(lower)) {
+    matchedStr = lower.match(/\b(?:today|aaj)\b/i)[0];
+  } else if (/\b(?:tomorrow|kal)\b/i.test(lower)) {
+    targetDate.setDate(targetDate.getDate() + 1);
+    matchedStr = lower.match(/\b(?:tomorrow|kal)\b/i)[0];
+  } else if (/\b(?:parso|day\s+after\s+tomorrow)\b/i.test(lower)) {
+    targetDate.setDate(targetDate.getDate() + 2);
+    matchedStr = lower.match(/\b(?:parso|day\s+after\s+tomorrow)\b/i)[0];
+  } else {
+    // Check specific days of week: "on monday", "this friday"
+    const daysMap = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+    const dayMatch = lower.match(/\b(?:on\s+|this\s+|next\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i);
+    if (dayMatch) {
+      const targetDay = daysMap[dayMatch[1].toLowerCase()];
+      const currentDay = now.getDay();
+      let diff = targetDay - currentDay;
+      if (diff <= 0) diff += 7; // Next occurrence
+      targetDate.setDate(targetDate.getDate() + diff);
+      matchedStr = dayMatch[0];
     }
   }
 
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
+  const y = targetDate.getFullYear();
+  const m = String(targetDate.getMonth() + 1).padStart(2, '0');
+  const d = String(targetDate.getDate()).padStart(2, '0');
+  const dateStr = `${y}-${m}-${d}`;
 
   return {
-    date: `${y}-${m}-${d}`,
-    textWithoutDate: textWithoutDate.trim()
+    date: dateStr,
+    textWithoutDate: matchedStr ? text.replace(new RegExp(matchedStr, 'i'), '').trim() : text
   };
 }
 
 export function extractTime(text) {
-  const match = text.match(/(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm|baje)?\b/i);
-  if (!match) return { time: '', textWithoutTime: text };
+  const match = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|baje)?\b/i);
+  if (!match) {
+    return { time: '', textWithoutTime: text };
+  }
 
   let h = parseInt(match[1]);
   let m = match[2] ? parseInt(match[2]) : 0;
@@ -281,7 +403,6 @@ export function extractTime(text) {
 
   if (meridian === 'pm' && h < 12) h += 12;
   if (meridian === 'am' && h === 12) h = 0;
-  // If baje and reasonable afternoon hour (1..7), assume PM
   if (meridian === 'baje' && h >= 1 && h <= 7) h += 12;
 
   const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
@@ -316,7 +437,6 @@ export function extractTimeRange(text) {
     };
   }
 
-  // Single time fallback
   const single = extractTime(text);
   return {
     startTime: single.time,
@@ -324,4 +444,3 @@ export function extractTimeRange(text) {
     textWithoutTime: single.textWithoutTime
   };
 }
-

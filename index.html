@@ -196,6 +196,14 @@
             <span class="nav-icon" style="display: flex; align-items: center; justify-content: center;"><svg class="nav-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></span>
             <span class="nav-text">Academic Workspace</span>
           </button>
+          <button class="nav-item" id="view-finance-btn" style="text-align: left; padding: 10px 14px; display:flex; align-items:center; gap:10px; font-size:13px; font-weight:500; border-radius:8px;">
+            <span class="nav-icon" style="display: flex; align-items: center; justify-content: center;"><svg class="nav-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg></span>
+            <span class="nav-text">Finance Workspace</span>
+          </button>
+          <button class="nav-item" id="view-wellbeing-btn" style="text-align: left; padding: 10px 14px; display:flex; align-items:center; gap:10px; font-size:13px; font-weight:500; border-radius:8px;">
+            <span class="nav-icon" style="display: flex; align-items: center; justify-content: center;"><svg class="nav-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></span>
+            <span class="nav-text">Wellbeing Workspace</span>
+          </button>
           <button class="nav-item" id="sidebar-nav-notes" style="text-align: left; padding: 10px 14px; display:flex; align-items:center; gap:10px; font-size:13px; font-weight:500; border-radius:8px;">
             <span class="nav-icon" style="display: flex; align-items: center; justify-content: center;"><svg class="nav-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></span>
             <span class="nav-text">Subject Notes</span>
@@ -511,6 +519,12 @@
 
       <!-- Academic & Professional Workspace View -->
       <div class="academic-workspace-container hidden" id="academic-workspace-view" style="overflow-y: auto; flex: 1;"></div>
+
+      <!-- Finance Workspace View -->
+      <div class="finance-workspace-container hidden" id="finance-workspace-view" style="overflow-y: auto; flex: 1; padding: 24px;"><div id="finance-workspace-content"></div></div>
+
+      <!-- Wellbeing Workspace View -->
+      <div class="wellbeing-workspace-container hidden" id="wellbeing-workspace-view" style="overflow-y: auto; flex: 1; padding: 24px;"><div id="wellbeing-workspace-content"></div></div>
 
       <!-- Bottom Productivity Statistics Bar -->
       <div class="stat-bar" id="stat-bar">

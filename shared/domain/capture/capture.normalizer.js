@@ -9,6 +9,8 @@ import { normalizeHabit } from '../entities/habit.schema.js';
 import { normalizeExpense } from '../entities/expense.schema.js';
 import { normalizeReminder } from '../entities/reminder.schema.js';
 import { normalizeCalendarEvent } from '../entities/calendar-event.schema.js';
+import { normalizeTransaction, normalizeBudget, normalizeSavingsGoal } from '../finance/finance.schemas.js';
+import { normalizeHydrationLog, normalizeRoutine } from '../wellbeing/wellbeing.schemas.js';
 
 /**
  * Normalizes capture output into a canonical entity payload and target storage key.
@@ -64,6 +66,65 @@ export function normalizeCaptureResult(type, fields = {}, originalText = '') {
         })
       };
 
+    case 'income':
+      return {
+        targetKey: 'finance_transactions',
+        entity: normalizeTransaction({
+          type: 'income',
+          amountMinor: fields.amountMinor,
+          amount: fields.amount,
+          currency: fields.currency,
+          title: fields.title || originalText,
+          description: fields.description || originalText,
+          transactionDate: fields.date
+        })
+      };
+
+    case 'budget':
+      return {
+        targetKey: 'finance_budgets',
+        entity: normalizeBudget({
+          limitMinor: fields.limitMinor,
+          limit: fields.limit,
+          currency: fields.currency,
+          period: fields.period,
+          category: fields.category,
+          name: fields.name || originalText
+        })
+      };
+
+    case 'savings_goal':
+      return {
+        targetKey: 'finance_savings_goals',
+        entity: normalizeSavingsGoal({
+          title: fields.title || originalText,
+          targetAmountMinor: fields.targetAmountMinor,
+          targetAmount: fields.targetAmount,
+          currency: fields.currency,
+          contributionFrequency: fields.contributionFrequency
+        })
+      };
+
+    case 'hydration':
+      return {
+        targetKey: 'hydration_logs',
+        entity: normalizeHydrationLog({
+          amountMl: fields.amountMl,
+          beverageType: fields.beverageType,
+          dateKey: fields.dateKey || fields.date
+        })
+      };
+
+    case 'routine':
+      return {
+        targetKey: 'wellbeing_routines',
+        entity: normalizeRoutine({
+          title: fields.title || originalText,
+          type: fields.type,
+          estimatedDurationMinutes: fields.estimatedDurationMinutes
+        })
+      };
+
     case 'reminder':
       return {
         targetKey: 'reminders',
@@ -99,4 +160,3 @@ export function normalizeCaptureResult(type, fields = {}, originalText = '') {
       };
   }
 }
-

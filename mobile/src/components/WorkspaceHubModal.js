@@ -81,6 +81,24 @@ const MODULES = [
     icon: 'calculator',
     color: '#C2A878',
     bgColor: 'rgba(186, 117, 23, 0.15)'
+  },
+  {
+    id: 'finance',
+    screenName: 'FinanceWorkspace',
+    title: 'Finance',
+    desc: 'Wallets, budgets & savings',
+    icon: 'card',
+    color: '#10B981',
+    bgColor: 'rgba(16, 185, 129, 0.15)'
+  },
+  {
+    id: 'wellbeing',
+    screenName: 'WellbeingWorkspace',
+    title: 'Wellbeing',
+    desc: 'Habits, hydration & routines',
+    icon: 'heart',
+    color: '#EC4899',
+    bgColor: 'rgba(236, 72, 153, 0.15)'
   }
 ];
 

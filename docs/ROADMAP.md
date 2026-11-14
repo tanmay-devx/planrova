@@ -30,15 +30,26 @@
 - Academic intelligence dashboard with evidence-based weak topics detection.
 - Seamless integration with Phase 3 Adaptive Planning Engine.
 
+### Phase 5: Finance & Wellbeing Intelligence
+- Canonical Personal Finance domain with authoritative integer minor units.
+- Account balance reconciliation, refund handling, and transfer cashflow isolation.
+- Deterministic budget intelligence with utilization, thresholds, and spending velocity forecasts.
+- Idempotent recurring payments and subscriptions with month-end date clamping.
+- Savings goals with required contribution pacing and feasibility calculations.
+- Canonical Wellbeing domain with schedule-aware habit streaks (daily, weekdays, weekly).
+- Millilitre-level hydration tracking with custom goals and non-spam reminder candidate slots.
+- Personal rituals and routines engine with ordered steps and duration rollups.
+- Mindful daily reflection check-ins (energy level 1-5, mood, private notes) without clinical claims.
+- Finance and Wellbeing Adaptive Planning adapters with Phase 3 proposal freshness.
+- Universal Quick Capture extended for finance and wellbeing intents with ambiguity checks.
+- Dedicated Web workspaces (`finance.ui.js`, `wellbeing.ui.js`) and Mobile screens (`FinanceScreen.js`, `WellbeingScreen.js`).
+
 ---
 
 ## Upcoming Milestones
 
-### Phase 5: Intelligent Focus, Habits & Biometric Wellbeing
-- Biometric and hydration telemetry correlation with cognitive focus sessions.
-- Adaptive streak recovery and habit plasticity modeling.
-- Deep work audio soundscapes and dynamic session pacing.
-
-### Phase 6: Personal Finance & Professional Deliverables
-- Dual-entry ledger accounting and semester budget forecasting.
-- Professional project roadmaps and milestone invoicing.
+### Phase 6: Professional Projects, Invoicing & Dual-Entry Ledger
+- Dual-entry T-account accounting and multi-currency exchange rate tables.
+- Professional project roadmaps, client milestones, and invoice generation.
+- Biometric telemetry correlation with deep work focus sessions.
+- Biometric audio soundscapes and dynamic session pacing.
