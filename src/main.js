@@ -24,6 +24,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 
 import { COLORS, TYPOGRAPHY, BORDER_RADIUS } from './utils/tokens.js';
 import { initCommandPalette } from './modules/command-palette.js';
+import { initQuickCaptureUI } from './modules/quick-capture/capture-ui.js';
 
 function injectCSSVariables() {
   const root = document.documentElement;
@@ -86,6 +87,7 @@ function runInit() {
   safeInit('Hydration', initHydration);
   safeInit('Notes', initNotes);
   safeInit('CommandPalette', initCommandPalette);
+  safeInit('QuickCapture', initQuickCaptureUI);
 
   // 3. Setup General Layout Triggers & Navigation switches
   safeInit('GeneralUI', setupGeneralUI);

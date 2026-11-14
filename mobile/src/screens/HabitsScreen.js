@@ -45,8 +45,14 @@ export default function HabitsScreen() {
       id: Date.now().toString(),
       name: newHabitName.trim(),
       icon: selectedIcon,
+      currentStreak: 0,
+      longestStreak: 0,
+      streak: 0,
       fire: 0,
-      logs: []
+      completionDates: [],
+      logs: [],
+      frequency: { type: 'daily', days: [] },
+      schemaVersion: 1
     };
     setHabits([...habits, newHabit]);
     setNewHabitName('');
@@ -126,7 +132,8 @@ export default function HabitsScreen() {
     const today = new Date().toISOString().split('T')[0];
     setHabits(habits.map(h => {
       if (h.id === habitId) {
-        const isCompletedToday = h.logs && h.logs.includes(today);
+        const dateList = Array.isArray(h.completionDates) ? h.completionDates : (h.logs || []);
+        const isCompletedToday = dateList.includes(today);
         if (!isCompletedToday) {
           Vibration.vibrate(40);
           try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch (e) {}
@@ -135,10 +142,32 @@ export default function HabitsScreen() {
         } else {
           try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch (e) {}
         }
-        const newLogs = isCompletedToday 
-          ? h.logs.filter(d => d !== today)
-          : [...(h.logs || []), today];
-        return { ...h, logs: newLogs, fire: isCompletedToday ? Math.max(0, h.fire - 1) : h.fire + 1 };
+        const newDates = isCompletedToday 
+          ? dateList.filter(d => d !== today)
+          : [...dateList, today];
+        
+        // Recalculate deterministic streak
+        let currentStreak = 0;
+        const dateSet = new Set(newDates);
+        if (dateSet.has(today)) {
+          currentStreak = 1;
+          const prev = new Date();
+          prev.setDate(prev.getDate() - 1);
+          while (dateSet.has(prev.toISOString().split('T')[0])) {
+            currentStreak += 1;
+            prev.setDate(prev.getDate() - 1);
+          }
+        }
+        
+        return { 
+          ...h, 
+          completionDates: newDates,
+          logs: newDates, 
+          currentStreak: currentStreak,
+          fire: currentStreak,
+          streak: currentStreak,
+          schemaVersion: 1
+        };
       }
       return h;
     }));
@@ -148,7 +177,7 @@ export default function HabitsScreen() {
   const progress = Math.min((hydration.water / displayTarget) * 100, 100);
 
   const todayStr = new Date().toISOString().split('T')[0];
-  const allCompleted = habits.length > 0 && habits.every(h => h.logs && h.logs.includes(todayStr));
+  const allCompleted = habits.length > 0 && habits.every(h => (h.completionDates || h.logs || []).includes(todayStr));
   const shimmerAnim = useRef(new Animated.Value(-150)).current;
 
   useEffect(() => {

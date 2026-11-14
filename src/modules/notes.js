@@ -1,5 +1,13 @@
 import { getStorageItem, setStorageItem } from '../utils/storage.js';
 import { formatDate } from '../utils/date.js';
+import { 
+  linkNoteAndTask, 
+  unlinkNoteAndTask, 
+  getLinkedTasksForNote, 
+  cleanupDeletedEntityLinks,
+  normalizeNote,
+  normalizeTask 
+} from '../../shared/domain/index.js';
 
 const NOTES_KEY = 'notes';
 const DRAFTS_HISTORY_KEY = 'notes_drafts';
@@ -121,6 +129,89 @@ export function openNotesDrawer(dateStr) {
   
   // Display Drawer
   document.getElementById('notes-drawer-overlay').classList.remove('hidden');
+
+  // Render Linked Tasks Section
+  renderNoteLinkedTasks(dateStr);
+}
+
+export function renderNoteLinkedTasks(dateStr) {
+  const container = document.getElementById('note-linked-tasks-list');
+  const countEl = document.getElementById('note-linked-tasks-count');
+  if (!container || !countEl) return;
+
+  container.innerHTML = '';
+  const notes = getStorageItem(NOTES_KEY, []);
+  const note = notes.find(n => n.date === dateStr);
+  const tasks = getStorageItem('tasks', []);
+
+  if (!note) {
+    countEl.textContent = '0';
+    container.innerHTML = `<span style="font-size:11px; color:#5A6070;">Save note content to link tasks.</span>`;
+    return;
+  }
+
+  const linkedTasks = getLinkedTasksForNote(note, tasks);
+  countEl.textContent = linkedTasks.length;
+
+  if (linkedTasks.length === 0) {
+    container.innerHTML = `<span style="font-size:11px; color:#5A6070;">No tasks linked yet. Click above to create one.</span>`;
+    return;
+  }
+
+  linkedTasks.forEach(task => {
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.alignItems = 'center';
+    row.style.justifyContent = 'space-between';
+    row.style.background = 'rgba(255,255,255,0.03)';
+    row.style.border = '1px solid rgba(255,255,255,0.06)';
+    row.style.borderRadius = '6px';
+    row.style.padding = '6px 10px';
+    row.style.fontSize = '12px';
+
+    row.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" class="task-check" ${task.completed ? 'checked' : ''} style="cursor:pointer;" />
+        <span style="${task.completed ? 'text-decoration:line-through; opacity:0.6;' : ''} color:#F3F1EC;">${task.title}</span>
+        <span style="font-size:10px; color:#8B92A0;">(${task.date || 'No date'})</span>
+      </div>
+      <button class="unlink-btn icon-btn" title="Unlink task" style="background:none; border:none; color:#8B92A0; cursor:pointer; font-size:12px; padding:2px 6px;">✕</button>
+    `;
+
+    // Toggle completion
+    row.querySelector('.task-check').addEventListener('change', (e) => {
+      const allTasks = getStorageItem('tasks', []);
+      const tIdx = allTasks.findIndex(t => t.id === task.id);
+      if (tIdx !== -1) {
+        allTasks[tIdx].completed = e.target.checked;
+        allTasks[tIdx].status = e.target.checked ? 'completed' : 'todo';
+        allTasks[tIdx].updatedAt = Date.now();
+        setStorageItem('tasks', allTasks);
+        import('./tasks.js').then(m => m.renderGrid && m.renderGrid());
+        renderNoteLinkedTasks(dateStr);
+      }
+    });
+
+    // Unlink button
+    row.querySelector('.unlink-btn').addEventListener('click', () => {
+      const allNotes = getStorageItem(NOTES_KEY, []);
+      const allTasks = getStorageItem('tasks', []);
+      const nIdx = allNotes.findIndex(n => n.id === note.id || n.date === note.date);
+      const tIdx = allTasks.findIndex(t => t.id === task.id);
+
+      if (nIdx !== -1 && tIdx !== -1) {
+        const { note: updNote, task: updTask } = unlinkNoteAndTask(allNotes[nIdx], allTasks[tIdx]);
+        allNotes[nIdx] = updNote;
+        allTasks[tIdx] = updTask;
+        setStorageItem(NOTES_KEY, allNotes);
+        setStorageItem('tasks', allTasks);
+        import('./tasks.js').then(m => m.renderGrid && m.renderGrid());
+        renderNoteLinkedTasks(dateStr);
+      }
+    });
+
+    container.appendChild(row);
+  });
 }
 
 function renderAttachmentsPreview(attachments) {
@@ -472,6 +563,40 @@ function setupNotesEvents() {
   setupInlineToolbar(editor);
   setupMentionMenu(editor);
   setupOCRScan();
+
+  // Create Task from Note Hook
+  const createTaskBtn = document.getElementById('note-create-task-btn');
+  if (createTaskBtn) {
+    createTaskBtn.addEventListener('click', () => {
+      if (!activeNoteDate) return;
+      saveActiveNote(false);
+
+      const titlePrompt = prompt("Enter task title to link with this note:");
+      if (!titlePrompt || !titlePrompt.trim()) return;
+
+      const allNotes = getStorageItem(NOTES_KEY, []);
+      const allTasks = getStorageItem('tasks', []);
+      let nIdx = allNotes.findIndex(n => n.date === activeNoteDate);
+      if (nIdx === -1) return;
+
+      const newTask = normalizeTask({
+        title: titlePrompt.trim(),
+        dueDate: activeNoteDate,
+        date: activeNoteDate,
+        category: 'study'
+      });
+
+      const { note: updNote, task: updTask } = linkNoteAndTask(allNotes[nIdx], newTask);
+      allNotes[nIdx] = updNote;
+      allTasks.push(updTask);
+
+      setStorageItem(NOTES_KEY, allNotes);
+      setStorageItem('tasks', allTasks);
+
+      import('./tasks.js').then(m => m.renderGrid && m.renderGrid());
+      renderNoteLinkedTasks(activeNoteDate);
+    });
+  }
 }
 
 function handleImageUpload(file) {

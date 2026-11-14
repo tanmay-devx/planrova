@@ -3,6 +3,13 @@ import { getStartOfWeek, getWeekDays, formatDate, formatTime, getDayName, getFor
 import { setFocusTask, addForestGrowth } from './pomodoro.js';
 import { renderMonthlyCalendar } from './monthly-cal.js';
 import { appendNotesButtonToHeader, renderPinnedNoteInsideColumn, openNotesDrawer } from './notes.js';
+import { 
+  linkNoteAndTask, 
+  unlinkNoteAndTask, 
+  getLinkedNotesForTask, 
+  cleanupDeletedEntityLinks,
+  normalizeTask
+} from '../../shared/domain/index.js';
 
 const TASKS_KEY = 'tasks';
 let currentWeekStart = getStartOfWeek(new Date());
@@ -158,8 +165,13 @@ function createTaskCard(task) {
   
   // Linked notes check
   const notes = getStorageItem('notes', []);
-  const linkedNote = notes.find(n => n.linkedTasks && n.linkedTasks.includes(task.id));
-  const noteIndicator = linkedNote ? `<span class="task-linked-note-indicator" data-date="${linkedNote.date}" title="Linked Note: ${linkedNote.title || 'Untitled Note'}" style="cursor:pointer; margin-left: 6px; font-size:11px; display:inline-flex; align-items:center;"><svg class="task-svg" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block; vertical-align:middle;"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></span>` : '';
+  const allNotes = Array.isArray(notes) ? notes : [];
+  const linkedNotes = getLinkedNotesForTask(task, allNotes);
+  const legacyNote = (!linkedNotes.length && allNotes.length)
+    ? allNotes.find(n => n.linkedTasks && n.linkedTasks.includes(task.id))
+    : null;
+  const primaryNote = linkedNotes[0] || legacyNote;
+  const noteIndicator = primaryNote ? `<span class="task-linked-note-indicator" data-date="${primaryNote.date}" title="Linked Note: ${primaryNote.title || 'Untitled Note'}${linkedNotes.length > 1 ? ` (+${linkedNotes.length - 1} more)` : ''}" style="cursor:pointer; margin-left: 6px; font-size:11px; display:inline-flex; align-items:center;"><svg class="task-svg" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block; vertical-align:middle;"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></span>` : '';
   
   card.innerHTML = `
     <div class="task-card-header">
@@ -322,6 +334,14 @@ function deleteTaskWithUndo(id) {
   lastDeletedTask = { ...tasks[index] };
   tasks.splice(index, 1);
   setStorageItem(TASKS_KEY, tasks);
+
+  // Clean up any notes that linked to this deleted task
+  const notes = getStorageItem('notes', []);
+  if (Array.isArray(notes)) {
+    const cleanedNotes = cleanupDeletedEntityLinks('task', id, notes);
+    setStorageItem('notes', cleanedNotes);
+  }
+
   renderGrid();
   
   // Trigger 5s Undo Notification
@@ -355,6 +375,25 @@ document.getElementById('undo-btn').addEventListener('click', () => {
     const tasks = getStorageItem(TASKS_KEY, []);
     tasks.push(lastDeletedTask);
     setStorageItem(TASKS_KEY, tasks);
+
+    // Restore link in notes if any
+    if (Array.isArray(lastDeletedTask.linkedNoteIds) && lastDeletedTask.linkedNoteIds.length > 0) {
+      const notes = getStorageItem('notes', []);
+      let notesChanged = false;
+      const updatedNotes = notes.map(n => {
+        if (lastDeletedTask.linkedNoteIds.includes(n.id)) {
+          const tIds = Array.isArray(n.linkedTaskIds) ? [...n.linkedTaskIds] : [];
+          if (!tIds.includes(lastDeletedTask.id)) {
+            tIds.push(lastDeletedTask.id);
+            notesChanged = true;
+            return { ...n, linkedTaskIds: tIds, linkedTasks: tIds };
+          }
+        }
+        return n;
+      });
+      if (notesChanged) setStorageItem('notes', updatedNotes);
+    }
+
     renderGrid();
     
     document.getElementById('undo-toast').classList.add('hidden');
@@ -391,17 +430,20 @@ function setupNavigation() {
 export function addTaskDirectly(taskObj) {
   const tasks = getStorageItem(TASKS_KEY, []);
   
-  const newTask = {
-    id: 't_' + Date.now(),
+  const newTask = normalizeTask({
+    id: taskObj.id || ('t_' + Date.now()),
     title: taskObj.title,
     desc: taskObj.desc || '',
+    description: taskObj.desc || '',
     date: taskObj.date,
+    dueDate: taskObj.date,
     startTime: taskObj.startTime || '',
     endTime: taskObj.endTime || '',
     category: taskObj.category || 'other',
     priority: taskObj.priority || 'medium',
-    completed: false
-  };
+    completed: false,
+    status: 'todo'
+  });
   
   tasks.push(newTask);
   setStorageItem(TASKS_KEY, tasks);
@@ -413,6 +455,68 @@ export function addTaskDirectly(taskObj) {
 
 // Add/Edit modal handlers
 let activeEditingTask = null;
+
+function renderTaskLinkedNotes(task) {
+  const container = document.getElementById('task-linked-notes-list');
+  const picker = document.getElementById('task-link-note-picker');
+  if (!container || !picker) return;
+
+  const notes = getStorageItem('notes', []);
+  const allNotes = Array.isArray(notes) ? notes : [];
+  const linkedNotes = getLinkedNotesForTask(task, allNotes);
+
+  container.innerHTML = '';
+
+  if (linkedNotes.length === 0) {
+    container.innerHTML = '<span style="font-size:11px; color:rgba(255,255,255,0.4); font-style:italic;">No linked notes yet.</span>';
+  } else {
+    linkedNotes.forEach(note => {
+      const chip = document.createElement('div');
+      chip.style.cssText = 'display:inline-flex; align-items:center; gap:6px; background:rgba(194,168,120,0.12); border:1px solid rgba(194,168,120,0.3); padding:3px 8px; border-radius:12px; font-size:11px; color:var(--text-primary);';
+      chip.innerHTML = `
+        <span style="cursor:pointer;" class="task-open-note-chip" data-date="${note.date}">📝 ${note.title || 'Untitled Note'} (${note.date})</span>
+        <button type="button" class="task-unlink-note-btn" data-note-id="${note.id}" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:12px; line-height:1; padding:0 2px;">×</button>
+      `;
+
+      chip.querySelector('.task-open-note-chip').addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.getElementById('task-modal-overlay').classList.add('hidden');
+        openNotesDrawer(note.date);
+      });
+
+      chip.querySelector('.task-unlink-note-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const nIdx = allNotes.findIndex(n => n.id === note.id);
+        const tasks = getStorageItem(TASKS_KEY, []);
+        const tIdx = tasks.findIndex(t => t.id === task.id);
+        if (nIdx !== -1 && tIdx !== -1) {
+          const { note: updNote, task: updTask } = unlinkNoteAndTask(allNotes[nIdx], tasks[tIdx]);
+          allNotes[nIdx] = updNote;
+          tasks[tIdx] = updTask;
+          setStorageItem('notes', allNotes);
+          setStorageItem(TASKS_KEY, tasks);
+          activeEditingTask = updTask;
+          renderTaskLinkedNotes(updTask);
+          renderGrid();
+        }
+      });
+
+      container.appendChild(chip);
+    });
+  }
+
+  // Populate picker with unlinked notes
+  const linkedNoteIds = new Set(task.linkedNoteIds || []);
+  const availableNotes = allNotes.filter(n => n && !n.deleted && !linkedNoteIds.has(n.id));
+
+  picker.innerHTML = '<option value="">+ Link existing note...</option>';
+  availableNotes.forEach(n => {
+    const opt = document.createElement('option');
+    opt.value = n.id;
+    opt.textContent = `${n.title || 'Untitled Note'} (${n.date})`;
+    picker.appendChild(opt);
+  });
+}
 
 function setupModalEvents() {
   const addBtn = document.getElementById('add-task-btn');
@@ -436,6 +540,9 @@ function setupModalEvents() {
       if (b.dataset.p === 'medium') b.classList.add('active');
       else b.classList.remove('active');
     });
+
+    const linkedRow = document.getElementById('task-linked-notes-row');
+    if (linkedRow) linkedRow.style.display = 'none';
     
     overlay.classList.remove('hidden');
   };
@@ -452,6 +559,32 @@ function setupModalEvents() {
     document.querySelectorAll('.priority-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
   });
+
+  // Note-Task link picker handler
+  const notePicker = document.getElementById('task-link-note-picker');
+  if (notePicker) {
+    notePicker.addEventListener('change', () => {
+      const noteId = notePicker.value;
+      if (!noteId || !activeEditingTask) return;
+
+      const allNotes = getStorageItem('notes', []);
+      const tasks = getStorageItem(TASKS_KEY, []);
+      const nIdx = allNotes.findIndex(n => n.id === noteId);
+      const tIdx = tasks.findIndex(t => t.id === activeEditingTask.id);
+
+      if (nIdx !== -1 && tIdx !== -1) {
+        const { note: updNote, task: updTask } = linkNoteAndTask(allNotes[nIdx], tasks[tIdx]);
+        allNotes[nIdx] = updNote;
+        tasks[tIdx] = updTask;
+        setStorageItem('notes', allNotes);
+        setStorageItem(TASKS_KEY, tasks);
+        activeEditingTask = updTask;
+        renderTaskLinkedNotes(updTask);
+        renderGrid();
+      }
+      notePicker.value = '';
+    });
+  }
   
   saveBtn.addEventListener('click', () => {
     const title = document.getElementById('task-title').value.trim();
@@ -473,30 +606,36 @@ function setupModalEvents() {
       // Modify
       const idx = tasks.findIndex(t => t.id === activeEditingTask.id);
       if (idx !== -1) {
-        tasks[idx] = {
+        tasks[idx] = normalizeTask({
           ...tasks[idx],
           title,
           desc,
+          description: desc,
           date,
+          dueDate: date,
           startTime,
           endTime,
           category,
-          priority
-        };
+          priority,
+          updatedAt: Date.now()
+        });
       }
     } else {
       // New
-      const newTask = {
+      const newTask = normalizeTask({
         id: 't_' + Date.now(),
         title,
         desc,
+        description: desc,
         date,
+        dueDate: date,
         startTime,
         endTime,
         category,
         priority,
-        completed: false
-      };
+        completed: false,
+        status: 'todo'
+      });
       
       tasks.push(newTask);
     }
@@ -524,6 +663,12 @@ function openEditModal(task) {
     if (b.dataset.p === task.priority) b.classList.add('active');
     else b.classList.remove('active');
   });
+
+  const linkedRow = document.getElementById('task-linked-notes-row');
+  if (linkedRow) {
+    linkedRow.style.display = 'block';
+    renderTaskLinkedNotes(task);
+  }
   
   document.getElementById('task-modal-overlay').classList.remove('hidden');
 }

@@ -41,8 +41,14 @@ service cloud.firestore {
       allow create: if isAuthenticated() 
         && request.resource.data.name is string 
         && request.resource.data.name.size() <= 100;
-      // Allow participants to update room state (join/leave/status)
-      allow update: if isAuthenticated();
+      // Allow participants to update room state (join/leave/status) while protecting ownership
+      allow update: if isAuthenticated()
+        && request.resource.data.createdBy == resource.data.createdBy
+        && (
+          request.resource.data.hostId == resource.data.hostId ||
+          resource.data.createdBy == request.auth.uid ||
+          resource.data.hostId == request.auth.uid
+        );
       // Prevent arbitrary room deletion; only host/creator or admin can delete
       allow delete: if isAuthenticated() && (
         resource.data.createdBy == request.auth.uid ||
@@ -56,7 +62,11 @@ service cloud.firestore {
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() <= 1000;
-        allow update, delete: if isAuthenticated() && request.auth.uid == resource.data.uid;
+        // Authorship immutability on message update
+        allow update: if isAuthenticated()
+          && request.auth.uid == resource.data.uid
+          && request.resource.data.uid == resource.data.uid;
+        allow delete: if isAuthenticated() && request.auth.uid == resource.data.uid;
       }
     }
 

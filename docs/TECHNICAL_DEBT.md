@@ -8,13 +8,18 @@ This document tracks identified architectural issues, code smells, performance b
 
 ### TD-001: Monolithic Screen and Module Files
 - **Severity:** High
-- **Impact:** `mobile/src/screens/AlarmScreen.js` is 3,539 lines long, containing alarms, sleep tracking, mission challenges, and audio player bindings in a single file. Similarly, `src/modules/notes.js` is over 1,000 lines. This severely impairs maintainability, testability, and code review velocity.
+- **Impact:** `mobile/src/screens/AlarmScreen.js` is 3,539 lines long, containing alarms, sleep tracking, mission challenges, and audio player bindings in a single file. Similarly, `src/modules/notes.js` is over 800 lines. This impairs maintainability, testability, and code review velocity.
 - **Proposed Solution:** Refactor screens into sub-components and custom hooks:
   - Extract mission challenges into `components/missions/{MathMission, StepMission, TypingMission}.js`.
   - Extract audio playback into `hooks/useAlarmAudio.js`.
   - Extract sleep tracking into `screens/SleepTrackerTab.js`.
 - **Dependencies:** React Native, Expo Audio
 - **Estimated Effort:** 3–4 engineer-days
+- **Scheduled Phase:** Phase 3 / Phase 4
+
+---
+
+## 2. Medium-Priority Technical Debt
 
 ### TD-002: Ineffective Dynamic Imports in Vite Web Build
 - **Severity:** Medium
@@ -22,17 +27,7 @@ This document tracks identified architectural issues, code smells, performance b
 - **Proposed Solution:** Standardize on static imports for shared singleton services (`database.js`, `storage.js`) and reserve dynamic `import()` exclusively for lazy-loaded route views (`studypool.js`, `monthly-cal.js`).
 - **Dependencies:** Vite configuration
 - **Estimated Effort:** 1 engineer-day
-
-### TD-003: Schema Mismatch in Habit Logging (Web vs Mobile)
-- **Severity:** High
-- **Impact:** Web planner tracks habit completion in a separate `habit_logs` key with `streak` counter, whereas the mobile React Native client tracks completion inside each habit object (`habit.logs = []`) with `fire` counter. This causes inconsistent sync representations.
-- **Proposed Solution:** Unify habit representation across both platforms in Phase 2 using the schema established in `src/db/validation.js` (`streak`, `icon`, `logs[]`).
-- **Dependencies:** Mobile `HabitsScreen.js`, Web `habits.js`
-- **Estimated Effort:** 2 engineer-days
-
----
-
-## 2. Medium-Priority Technical Debt
+- **Scheduled Phase:** Phase 3
 
 ### TD-004: Lack of Android SDK in Headless CI/Local Development
 - **Severity:** Medium
@@ -40,6 +35,7 @@ This document tracks identified architectural issues, code smells, performance b
 - **Proposed Solution:** Implement GitHub Actions workflow with Android SDK setup (`android-actions/setup-android`) and automated EAS Build triggers for Android artifact generation.
 - **Dependencies:** GitHub Actions, EAS CLI
 - **Estimated Effort:** 1.5 engineer-days
+- **Scheduled Phase:** Phase 3 / Phase 7
 
 ### TD-005: Server SQLite DB Prototype Leftover
 - **Severity:** Low
@@ -47,6 +43,7 @@ This document tracks identified architectural issues, code smells, performance b
 - **Proposed Solution:** Archive or document `server/index.js` and `server/db.js` as an experimental offline server prototype, or remove them from the active proxy folder.
 - **Dependencies:** None
 - **Estimated Effort:** 0.5 engineer-day
+- **Scheduled Phase:** Phase 3
 
 ### TD-006: Hardcoded Firebase Config in Source Code
 - **Severity:** Medium
@@ -54,10 +51,23 @@ This document tracks identified architectural issues, code smells, performance b
 - **Proposed Solution:** Migrate configuration values to `.env` files with fallback to existing values.
 - **Dependencies:** Vite env, Expo env
 - **Estimated Effort:** 1 engineer-day
+- **Scheduled Phase:** Phase 3
 
 ---
 
-## 3. Debt Resolved in Phase 1 (Reference)
+## 3. Debt Resolved in Phase 2
+
+| Debt ID | Title | Resolution |
+| :--- | :--- | :--- |
+| **RESOLVED-P2-01** | Schema Mismatch in Habit Logging (Web vs Mobile) | Unified on canonical `completionDates` with deterministic streak algorithm, dual-writing `streak`, `fire`, and `logs` for backwards compatibility. |
+| **RESOLVED-P2-02** | Lack of Bidirectional Note-Task Integrity | Implemented `shared/domain/relationships/entity-links.js` with symmetric linking (`linkedTaskIds` & `linkedNoteIds`) and soft-deletion cascade protection. |
+| **RESOLVED-P2-03** | Fragmented Quick Capture Experiences | Built Universal Quick Capture engine (<5ms local-first classifier + temporal parser) with Web modal/FAB/shortcut and Mobile `QuickCaptureModal`. |
+| **RESOLVED-P2-04** | Firestore Study Room Privilege Escalation | Hardened `firestore.rules` to prevent non-hosts from altering room ownership (`createdBy`, `hostId`) and forbid altering message `uid` during updates. |
+| **RESOLVED-P2-05** | Lack of Shared Canonical Domain Contracts | Created `shared/domain/` entity schemas and normalizers (`Task`, `Note`, `Habit`, `Expense`, `Reminder`, `CalendarEvent`) with 100% test coverage. |
+
+---
+
+## 4. Debt Resolved in Phase 1 (Reference)
 
 | Debt ID | Title | Resolution |
 | :--- | :--- | :--- |
@@ -71,4 +81,3 @@ This document tracks identified architectural issues, code smells, performance b
 | **RESOLVED-08** | Unused dependencies and security vulnerabilities | Removed unused `puppeteer` and `@dnd-kit/*` packages, clearing high/critical vulnerabilities. |
 | **RESOLVED-09** | Missing Firestore Security Rules | Created strict `firestore.rules` and `firebase.json` enforcing per-user isolation. |
 | **RESOLVED-10** | Unprotected OCR Proxy Endpoints | Added in-memory sliding window rate limiting and payload validation to `proxy.js`. |
-

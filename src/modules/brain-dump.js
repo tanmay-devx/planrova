@@ -1,6 +1,7 @@
 import { getStorageItem, setStorageItem } from '../utils/storage.js';
 import { parseNaturalLanguageTask } from '../utils/nlp.js';
 import { addTaskDirectly } from './tasks.js';
+import { executeQuickCapture } from './quick-capture/capture-controller.js';
 
 const DUMP_KEY = 'brain_dump';
 
@@ -52,13 +53,8 @@ function renderBrainDumpList(items) {
       const item = items[idx];
       const val = typeof item === 'string' ? item : item.text;
       
-      // Auto parse with NLP
-      const parsed = parseNaturalLanguageTask(val);
-      if (Array.isArray(parsed)) {
-        parsed.forEach(task => addTaskDirectly(task));
-      } else {
-        addTaskDirectly(parsed);
-      }
+      // Auto parse and route with Universal Quick Capture
+      executeQuickCapture(val);
       
       // Remove from dump
       items.splice(idx, 1);

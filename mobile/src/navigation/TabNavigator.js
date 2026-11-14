@@ -27,6 +27,7 @@ import { auth } from '../firebase';
 import { useFirestoreData } from '../hooks/useFirestoreData';
 import { calculateXPProgress, getLevelTitle } from '../utils/gamification';
 import { awardXP } from '../utils/xpManager';
+import QuickCaptureModal from '../components/QuickCapture/QuickCaptureModal';
 
 const Tab = createBottomTabNavigator();
 const { width } = Dimensions.get('window');
@@ -76,11 +77,12 @@ export default function TabNavigator() {
   const [tasks, setTasks] = useFirestoreData('tasks', []);
   const [expenses, setExpenses] = useFirestoreData('expenses', []);
   const [notes, setNotes] = useFirestoreData('notes', []);
+  const [habits, setHabits] = useFirestoreData('user_habits', []);
+  const [brainDump, setBrainDump] = useFirestoreData('brain_dump', []);
   const [gamification, setGamification] = useFirestoreData('gamification', { level: 1, xp: 0 });
 
   // Modal States
   const [showQuickAdd, setShowQuickAdd] = useState(false);
-  const [quickAddTab, setQuickAddTab] = useState('task'); // 'task', 'expense', 'note'
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
   const [previousLevel, setPreviousLevel] = useState(null);
 
@@ -154,78 +156,87 @@ export default function TabNavigator() {
     });
   };
 
-  const handleAddTask = () => {
-    if (!taskTitle.trim()) return;
-    const newTask = {
-      id: Date.now().toString(),
-      title: taskTitle.trim(),
-      completed: false,
-      date: new Date().toISOString().split('T')[0]
-    };
-    setTasks([...tasks, newTask]);
-    setTaskTitle('');
-    setShowQuickAdd(false);
-    Vibration.vibrate(40);
-  };
+  const handleUniversalCapture = ({ type, text, date }) => {
+    const now = Date.now();
+    const dateStr = date ? date.split('T')[0] : new Date().toISOString().split('T')[0];
 
-  const handleAddExpense = () => {
-    const amt = parseFloat(expenseAmount);
-    if (!amt || isNaN(amt)) return;
-    
-    // Auto categorize
-    const desc = expenseDesc.trim().toLowerCase();
-    let category = 'Misc';
-    if (desc.includes('chai') || desc.includes('maggi') || desc.includes('food')) category = 'Food';
-    else if (desc.includes('metro') || desc.includes('auto') || desc.includes('cab')) category = 'Transport';
-    else if (desc.includes('xerox') || desc.includes('print') || desc.includes('book')) category = 'Books';
+    if (type === 'expense') {
+      const amtMatch = text.match(/\b\d+(?:\.\d{1,2})?\b/);
+      const amt = amtMatch ? parseFloat(amtMatch[0]) : 0;
+      const desc = text.replace(/(?:spent|spend|bought|paid|cost|for|on|\$|₹|\brs\.?)/gi, '').replace(/\b\d+(?:\.\d{1,2})?\b/, '').trim() || 'Quick Expense';
+      let category = 'Other';
+      const lower = text.toLowerCase();
+      if (/food|lunch|dinner|chai|coffee|snack/i.test(lower)) category = 'Food';
+      else if (/cab|uber|ola|auto|metro|bus/i.test(lower)) category = 'Transport';
+      else if (/book|xerox|print|exam|study/i.test(lower)) category = 'Study';
 
-    const newExpense = {
-      id: Date.now().toString(),
-      amount: amt,
-      desc: expenseDesc.trim() || 'Quick Expense',
-      date: new Date().toISOString(),
-      category
-    };
-    setExpenses([newExpense, ...expenses]);
-
-    // Award +5 XP
-    awardXP(userId, gamification, 5, `Logged expense: ${newExpense.desc} (₹${newExpense.amount})`).then(setGamification);
-
-    setExpenseAmount('');
-    setExpenseDesc('');
-    setShowQuickAdd(false);
-    Vibration.vibrate(40);
-  };
-
-  const cleanNoteTextForPreview = (text) => {
-    if (!text) return '';
-    let cleaned = text;
-    cleaned = cleaned.replace(/---/g, '');
-    cleaned = cleaned.replace(/\[OCR SCAN:[^\]]*\]/gi, '');
-    cleaned = cleaned.replace(/#+\s*/g, '');
-    cleaned = cleaned.replace(/\*\*|__|\*|_|`|~/g, '');
-    cleaned = cleaned.replace(/\s+/g, ' ').trim();
-    return cleaned;
-  };
-
-  const handleAddNote = () => {
-    if (!noteContent.trim()) return;
-    const cleanContent = cleanNoteTextForPreview(noteContent);
-    const autoTitle = cleanContent.substring(0, 40).trim() || 'Untitled Note';
-    const newNote = {
-      id: Date.now().toString(),
-      subject: noteSubject.trim() || 'General',
-      title: noteTitle.trim() || autoTitle,
-      text: noteContent.trim(),
-      date: new Date().toISOString()
-    };
-    setNotes([newNote, ...notes]);
-
-    setNoteSubject('');
-    setNoteTitle('');
-    setNoteContent('');
-    setShowQuickAdd(false);
-    Vibration.vibrate(40);
+      const newExpense = {
+        id: now.toString(),
+        amount: amt,
+        amountMinor: Math.round(amt * 100),
+        currency: 'INR',
+        description: desc,
+        desc: desc,
+        category,
+        date: dateStr,
+        schemaVersion: 1
+      };
+      setExpenses([newExpense, ...expenses]);
+      awardXP(userId, gamification, 5, `Logged expense: ${newExpense.desc}`).then(setGamification);
+    } else if (type === 'habit') {
+      const name = text.replace(/^(?:build\s+(?:a\s+)?habit|start\s+(?:a\s+)?habit|start|track)\s+/i, '').replace(/\b(?:every\s+day|daily)\b/gi, '').trim() || 'Daily Habit';
+      const newHabit = {
+        id: now.toString(),
+        name,
+        icon: 'sparkles',
+        currentStreak: 0,
+        longestStreak: 0,
+        streak: 0,
+        fire: 0,
+        completionDates: [],
+        logs: [],
+        frequency: { type: 'daily', days: [] },
+        schemaVersion: 1
+      };
+      setHabits([newHabit, ...habits]);
+    } else if (type === 'note') {
+      const words = text.split(/\s+/).filter(Boolean);
+      const autoTitle = words.slice(0, 5).join(' ') || 'Quick Note';
+      const newNote = {
+        id: now.toString(),
+        subject: 'General',
+        title: autoTitle,
+        content: text,
+        text: text,
+        date: dateStr,
+        linkedTaskIds: [],
+        schemaVersion: 1
+      };
+      setNotes([newNote, ...notes]);
+    } else if (type === 'brain_dump') {
+      const newDump = {
+        id: now.toString(),
+        text,
+        date: new Date().toISOString()
+      };
+      setBrainDump([newDump, ...brainDump]);
+    } else {
+      // task, reminder, calendar_event -> saves as planner task
+      const newTask = {
+        id: 't_' + now,
+        title: text.replace(/\b(?:tomorrow|today|kal)\b/gi, '').trim() || 'Quick Task',
+        desc: '',
+        date: dateStr,
+        category: 'study',
+        priority: 'medium',
+        status: 'todo',
+        completed: false,
+        linkedNoteIds: [],
+        schemaVersion: 1
+      };
+      setTasks([...tasks, newTask]);
+      awardXP(userId, gamification, 10, `Captured task: ${newTask.title}`).then(setGamification);
+    }
   };
 
   const handleShareStatus = async () => {
@@ -348,126 +359,12 @@ export default function TabNavigator() {
         <Ionicons name="add" size={28} color="#0F1115" />
       </TouchableOpacity>
 
-      {/* Quick Add Modal */}
-      <Modal
+      {/* Universal Quick Capture Modal */}
+      <QuickCaptureModal
         visible={showQuickAdd}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowQuickAdd(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            
-            {/* Modal Tabs */}
-            <View style={styles.modalTabs}>
-              <TouchableOpacity 
-                style={[styles.modalTab, quickAddTab === 'task' && styles.modalTabActive]}
-                onPress={() => setQuickAddTab('task')}
-              >
-                <Text style={[styles.modalTabText, quickAddTab === 'task' && styles.modalTabTextActive]}>Task</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.modalTab, quickAddTab === 'expense' && styles.modalTabActive]}
-                onPress={() => setQuickAddTab('expense')}
-              >
-                <Text style={[styles.modalTabText, quickAddTab === 'expense' && styles.modalTabTextActive]}>Expense</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.modalTab, quickAddTab === 'note' && styles.modalTabActive]}
-                onPress={() => setQuickAddTab('note')}
-              >
-                <Text style={[styles.modalTabText, quickAddTab === 'note' && styles.modalTabTextActive]}>Note</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Modal Body */}
-            {quickAddTab === 'task' && (
-              <View style={styles.form}>
-                <Text style={styles.label}>Task Description</Text>
-                <TextInput 
-                  style={styles.input}
-                  placeholder="e.g. Solve physics questions..."
-                  placeholderTextColor="#5A6070"
-                  value={taskTitle}
-                  onChangeText={setTaskTitle}
-                  autoFocus
-                />
-                <TouchableOpacity style={styles.submitBtn} onPress={handleAddTask}>
-                  <Text style={styles.submitBtnText}>Add Task</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {quickAddTab === 'expense' && (
-              <View style={styles.form}>
-                <Text style={styles.label}>Amount (₹)</Text>
-                <TextInput 
-                  style={styles.input}
-                  placeholder="e.g. 50"
-                  placeholderTextColor="#5A6070"
-                  keyboardType="numeric"
-                  value={expenseAmount}
-                  onChangeText={setExpenseAmount}
-                  autoFocus
-                />
-                <Text style={styles.label}>Description</Text>
-                <TextInput 
-                  style={styles.input}
-                  placeholder="e.g. Samosa & Chai"
-                  placeholderTextColor="#5A6070"
-                  value={expenseDesc}
-                  onChangeText={setExpenseDesc}
-                />
-                <TouchableOpacity style={styles.submitBtn} onPress={handleAddExpense}>
-                  <Text style={styles.submitBtnText}>Log Expense (+5 XP)</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {quickAddTab === 'note' && (
-              <View style={styles.form}>
-                <Text style={styles.label}>Subject</Text>
-                <TextInput 
-                  style={styles.input}
-                  placeholder="e.g. Maths-II"
-                  placeholderTextColor="#5A6070"
-                  value={noteSubject}
-                  onChangeText={setNoteSubject}
-                  autoFocus
-                />
-                <Text style={styles.label}>Title</Text>
-                <TextInput 
-                  style={styles.input}
-                  placeholder="e.g. Lecture 4 Summary"
-                  placeholderTextColor="#5A6070"
-                  value={noteTitle}
-                  onChangeText={setNoteTitle}
-                />
-                <Text style={styles.label}>Content</Text>
-                <TextInput 
-                  style={[styles.input, { minHeight: 80, textAlignVertical: 'top' }]}
-                  placeholder="Type notes content here..."
-                  placeholderTextColor="#5A6070"
-                  value={noteContent}
-                  onChangeText={setNoteContent}
-                  multiline
-                />
-                <TouchableOpacity style={styles.submitBtn} onPress={handleAddNote}>
-                  <Text style={styles.submitBtnText}>Save Note</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <TouchableOpacity 
-              style={styles.closeBtn}
-              onPress={() => setShowQuickAdd(false)}
-            >
-              <Text style={styles.closeBtnText}>Cancel</Text>
-            </TouchableOpacity>
-
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setShowQuickAdd(false)}
+        onSave={handleUniversalCapture}
+      />
 
       {/* Global Level-Up Reveal Modal */}
       <Modal

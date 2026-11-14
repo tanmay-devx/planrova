@@ -1,6 +1,11 @@
 import { getStorageItem, setStorageItem } from '../utils/storage.js';
 import { addXP, logDailyActivity } from './gamification.js';
 import { addCoins } from './shop.js';
+import { 
+  normalizeHabit, 
+  calculateHabitStreaks, 
+  migrateHabitsToCanonical 
+} from '../../shared/domain/index.js';
 
 const HABITS_KEY = 'user_habits';
 const HABIT_LOG_KEY = 'habit_logs'; // Logs completed habit dates: { habitId: ['YYYY-MM-DD', ...] }
@@ -13,8 +18,11 @@ const defaultHabits = [
 ];
 
 export function initHabits() {
-  const habits = getStorageItem(HABITS_KEY, defaultHabits);
+  const rawHabits = getStorageItem(HABITS_KEY, defaultHabits);
   const logs = getStorageItem(HABIT_LOG_KEY, {});
+  
+  // Canonical migration: reconcile historical dates from all sources into completionDates
+  const habits = migrateHabitsToCanonical(rawHabits, logs);
   
   renderHabitsList(habits, logs);
   setupHabitsEvents(habits, logs);
@@ -27,13 +35,15 @@ function renderHabitsList(habits, logs) {
   const todayStr = getTodayString();
   
   habits.forEach((habit) => {
-    // Cross-platform compatibility: check both habit_logs map and habit.logs array
-    const habitLogs = (logs[habit.id] || []).concat(Array.isArray(habit.logs) ? habit.logs : []);
-    const isCompletedToday = habitLogs.includes(todayStr);
+    // Completion source of truth is completionDates (with fallback to legacy logs)
+    const isCompletedToday = Array.isArray(habit.completionDates)
+      ? habit.completionDates.includes(todayStr)
+      : ((logs[habit.id] || []).concat(habit.logs || []).includes(todayStr));
     
-    // Cross-platform compatibility: check both streak and fire
-    const rawStreak = typeof habit.streak === 'number' ? habit.streak : (typeof habit.fire === 'number' ? habit.fire : 0);
-    const currentStreak = !isNaN(rawStreak) ? rawStreak : 0;
+    // Streak source of truth is currentStreak (with fallback to streak/fire)
+    const currentStreak = typeof habit.currentStreak === 'number'
+      ? habit.currentStreak
+      : (typeof habit.streak === 'number' ? habit.streak : (typeof habit.fire === 'number' ? habit.fire : 0));
     
     const row = document.createElement('div');
     row.className = 'habit-row';
@@ -42,7 +52,7 @@ function renderHabitsList(habits, logs) {
         <div class="habit-checkbox ${isCompletedToday ? 'checked' : ''}" data-id="${habit.id}"></div>
         <span class="habit-name">${habit.name}</span>
       </div>
-      <div class="habit-streak" title="7-day badge active" style="display:flex; align-items:center; gap:2px; font-size:11px; color:var(--text-secondary);">
+      <div class="habit-streak" title="Streak active" style="display:flex; align-items:center; gap:2px; font-size:11px; color:var(--text-secondary);">
         <svg class="streak-svg" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block; vertical-align:middle; color:#f97316;"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg> ${currentStreak}
       </div>
     `;
@@ -58,30 +68,46 @@ function renderHabitsList(habits, logs) {
       
       const isChecked = box.classList.toggle('checked');
       
-      if (!logs[id]) logs[id] = [];
-      if (!Array.isArray(habits[index].logs)) habits[index].logs = [];
-      
-      const rawCurrent = typeof habits[index].streak === 'number' ? habits[index].streak : (typeof habits[index].fire === 'number' ? habits[index].fire : 0);
-      const currentStreak = !isNaN(rawCurrent) ? rawCurrent : 0;
+      if (!Array.isArray(habits[index].completionDates)) {
+        habits[index].completionDates = [...new Set((logs[id] || []).concat(habits[index].logs || []))];
+      }
 
       if (isChecked) {
-        if (!logs[id].includes(todayStr)) logs[id].push(todayStr);
-        if (!habits[index].logs.includes(todayStr)) habits[index].logs.push(todayStr);
+        if (!habits[index].completionDates.includes(todayStr)) {
+          habits[index].completionDates.push(todayStr);
+        }
         
-        const nextStreak = currentStreak + 1;
-        habits[index].streak = nextStreak;
-        habits[index].fire = nextStreak;
+        // Recalculate deterministic streak
+        const { currentStreak, longestStreak } = calculateHabitStreaks(habits[index].completionDates);
+        habits[index].currentStreak = currentStreak;
+        habits[index].longestStreak = longestStreak;
+        habits[index].streak = currentStreak;
+        habits[index].fire = currentStreak;
+        habits[index].logs = habits[index].completionDates;
+        habits[index].updatedAt = Date.now();
+
+        // Update legacy logs backup
+        if (!logs[id]) logs[id] = [];
+        if (!logs[id].includes(todayStr)) logs[id].push(todayStr);
 
         addXP(15);
         logDailyActivity('task');
         addCoins(5);
       } else {
-        logs[id] = logs[id].filter(d => d !== todayStr);
-        habits[index].logs = habits[index].logs.filter(d => d !== todayStr);
+        habits[index].completionDates = habits[index].completionDates.filter(d => d !== todayStr);
         
-        const nextStreak = Math.max(0, currentStreak - 1);
-        habits[index].streak = nextStreak;
-        habits[index].fire = nextStreak;
+        // Recalculate deterministic streak
+        const { currentStreak, longestStreak } = calculateHabitStreaks(habits[index].completionDates);
+        habits[index].currentStreak = currentStreak;
+        habits[index].longestStreak = longestStreak;
+        habits[index].streak = currentStreak;
+        habits[index].fire = currentStreak;
+        habits[index].logs = habits[index].completionDates;
+        habits[index].updatedAt = Date.now();
+
+        if (logs[id]) {
+          logs[id] = logs[id].filter(d => d !== todayStr);
+        }
       }
       
       setStorageItem(HABITS_KEY, habits);
@@ -96,15 +122,12 @@ function setupHabitsEvents(habits, logs) {
   
   addBtn.addEventListener('click', () => {
     const name = prompt("Enter habit name:");
-    if (!name) return;
+    if (!name || !name.trim()) return;
     
-    const newHabit = {
-      id: 'h_' + Date.now(),
-      name,
-      streak: 0,
-      fire: 0,
-      logs: []
-    };
+    const newHabit = normalizeHabit({
+      name: name.trim(),
+      icon: 'sparkles'
+    });
     
     habits.push(newHabit);
     setStorageItem(HABITS_KEY, habits);

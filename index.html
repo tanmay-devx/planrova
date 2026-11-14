@@ -610,6 +610,17 @@
           <!-- Interactive Editor Area -->
           <div class="editor-area" contenteditable="true" id="editor-content-area" placeholder="Start typing your second brain here..."></div>
 
+          <!-- Note-Task Bidirectional Relationships Section -->
+          <div id="note-linked-tasks-section" style="margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+              <span style="font-size: 11px; font-weight: 700; color: #C2A878; display:flex; align-items:center; gap: 4px;">
+                🔗 LINKED TASKS (<span id="note-linked-tasks-count">0</span>)
+              </span>
+              <button type="button" id="note-create-task-btn" class="btn-ghost" style="padding: 2px 8px; font-size: 10px; border-radius: 4px; color: #C2A878;">+ Create Task from Note</button>
+            </div>
+            <div id="note-linked-tasks-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+          </div>
+
           <!-- AI Floating/Fixed Action Row -->
           <div style="display:flex; gap:8px; margin-top:16px;">
             <button class="btn-ghost" id="ai-summarise-btn" style="flex:1; font-size:12px; padding:8px 12px;">AI Summarise</button>
@@ -930,6 +941,19 @@
               <option value="30">30 minutes before</option>
               <option value="60">1 hour before</option>
             </select>
+          </div>
+        </div>
+
+        <!-- Note-Task Bidirectional Relationships -->
+        <div class="form-row" id="task-linked-notes-row" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px;">
+          <div class="form-group full">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+              <label style="color:#C2A878; font-weight:700; font-size:11px;">Linked Notes 📝</label>
+              <select id="task-link-note-picker" style="font-size:11px; padding:3px 8px; border-radius:4px; max-width:200px; background: rgba(0,0,0,0.3); color: #F3F1EC; border: 1px solid rgba(255,255,255,0.1);">
+                <option value="">+ Link existing note...</option>
+              </select>
+            </div>
+            <div id="task-linked-notes-list" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
           </div>
         </div>
       </div>

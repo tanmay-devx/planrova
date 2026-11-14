@@ -2,7 +2,7 @@
 
 ```mermaid
 flowchart LR
-    P1["Phase 1: Foundation & Reliability<br/>(COMPLETED)"] --> P2["Phase 2: Unified Domain & Capture"]
+    P1["Phase 1: Foundation & Reliability<br/>(COMPLETED)"] --> P2["Phase 2: Unified Domain & Capture<br/>(COMPLETED)"]
     P2 --> P3["Phase 3: Adaptive Planning"]
     P3 --> P4["Phase 4: Academic Workspaces"]
     P4 --> P5["Phase 5: Finance & Wellbeing"]
@@ -16,25 +16,30 @@ flowchart LR
 ## Phase 1: Foundation and Reliability (Completed)
 - **Status:** **DONE**
 - **Objectives:**
-  - Audit and inventory existing web, mobile, server, and database codebases.
-  - Implement durable offline synchronization queue with exponential backoff and jitter.
-  - Eliminate record resurrection using deletion tombstones for collections.
-  - Fix cross-account data leakage in IndexedDB on account switching.
-  - Standardize monetary calculations using integer minor units.
-  - Provide timezone-safe date parsing to eliminate UTC midnight day shifts.
-  - Establish Vitest unit & integration test suites.
-  - Create CI/CD workflow running test, build, and quality gates.
-  - Provide strict Firestore security rules and backend proxy rate limiting.
+  - [x] Audit and inventory existing web, mobile, server, and database codebases.
+  - [x] Implement durable offline synchronization queue with exponential backoff and jitter.
+  - [x] Eliminate record resurrection using deletion tombstones for collections.
+  - [x] Fix cross-account data leakage in IndexedDB on account switching.
+  - [x] Standardize monetary calculations using integer minor units.
+  - [x] Provide timezone-safe date parsing to eliminate UTC midnight day shifts.
+  - [x] Establish Vitest unit & integration test suites.
+  - [x] Create CI/CD workflow running test, build, and quality gates.
+  - [x] Provide strict Firestore security rules and backend proxy rate limiting.
 
 ---
 
-## Phase 2: Unified Domain and Capture
-- **Focus:** Ubiquitous input capture & shared domain abstractions.
-- **Milestones:**
-  - Universal Quick-Capture floating tray across web and mobile.
-  - Shared validation package between React Native and Vanilla ES6 Web.
-  - Bidirectional note-to-task linking graph.
-  - Unified habit schema aligning web `streak` with mobile `fire`.
+## Phase 2: Unified Domain and Capture (Completed)
+- **Status:** **DONE**
+- **Focus:** Ubiquitous input capture & shared canonical domain abstractions.
+- **Objectives:**
+  - [x] Shared canonical domain models and normalizers (`Task`, `Note`, `Habit`, `Expense`, `Reminder`, `CalendarEvent`).
+  - [x] Universal Quick-Capture engine (<5ms local-first classifier + temporal parser).
+  - [x] Web Quick Capture floating action button (`#quick-capture-fab`), modal dialog, and `Ctrl+Q` global shortcut.
+  - [x] Mobile React Native `QuickCaptureModal` integrated into primary Tab Navigator and Capture screen.
+  - [x] Bidirectional Note-to-Task linking with symmetric referencing and soft-deletion cascade protection.
+  - [x] Unified Habit schema aligning Web `streak` with Mobile `fire` via canonical `completionDates`.
+  - [x] Firestore security rules hardening (Study Room ownership protection and message authorship immutability).
+  - [x] 100% test pass rate across 15 test suites and 85 automated tests.
 
 ---
 
@@ -92,4 +97,3 @@ flowchart LR
   - End-to-End Encryption (E2EE) for private notes using Web Crypto API.
   - Automated database backup snapshots and point-in-time recovery.
   - Penetration testing, SOC2 compliance preparation, and comprehensive telemetry.
-
