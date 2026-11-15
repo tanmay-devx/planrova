@@ -7,6 +7,15 @@
 //
 // The app tries each URL in order and uses the first one that responds.
 
+import { auth } from '../firebase';
+
+// ── Dependency injection for testing / isolation ─────────────────────────
+let _authInstance = auth;
+
+export function setFirebaseAuth(customAuth) {
+  _authInstance = customAuth;
+}
+
 // ── Your deployed cloud proxy URL (set this after deploying to Railway/Render) ──
 // Example: 'https://planrova-proxy.up.railway.app'
 export const CLOUD_PROXY_URL = 'https://planory-ocr-proxy.onrender.com';   // ← Paste your Railway URL here after deploy
@@ -27,10 +36,45 @@ export function getProxyUrls() {
   return urls;
 }
 
-// ── Make an OCR request through any available proxy ──
-// payload: the Groq chat completions payload (model + messages)
-// type: 'whiteboard' | 'calendar' | 'timetable'
-export async function callOcrProxy(payload, type = 'scan') {
+/**
+ * Retrieves the current authenticated Firebase user's ID token.
+ * Automatically refreshes if expired.
+ * Never logs or exposes raw tokens.
+ *
+ * @param {boolean} forceRefresh - Force refresh token from Firebase
+ * @returns {Promise<string|null>} The ID token string or null if unauthenticated
+ */
+export async function getAuthToken(forceRefresh = false) {
+  try {
+    const activeAuth = _authInstance || auth;
+    const user = activeAuth?.currentUser;
+    if (user && typeof user.getIdToken === 'function') {
+      return await user.getIdToken(forceRefresh);
+    }
+  } catch (err) {
+    // Redact any credential info from log output
+    console.warn('[OCR] Failed to retrieve authentication token:', err.message);
+  }
+  return null;
+}
+
+/**
+ * Make an OCR request through any available proxy.
+ * Cryptographically authenticated with Firebase ID token.
+ * 
+ * @param {object} payload - The Groq chat completions payload (model + messages)
+ * @param {string} type - 'whiteboard' | 'calendar' | 'timetable'
+ * @param {object} options - Optional overrides (e.g. { authToken })
+ * @returns {Promise<Response>}
+ */
+export async function callOcrProxy(payload, type = 'scan', options = {}) {
+  // 1. Resolve Firebase Auth token
+  const token = options.authToken !== undefined ? options.authToken : await getAuthToken();
+
+  if (!token) {
+    throw new Error('Authentication required: You must be signed in to perform OCR scans.');
+  }
+
   const proxyUrls = getProxyUrls();
   let lastError = null;
 
@@ -38,16 +82,35 @@ export async function callOcrProxy(payload, type = 'scan') {
     try {
       const response = await fetch(`${baseUrl}/api/ocr`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ type, payload }),
       });
+
       if (response.ok) return response;
-      // Non-ok from a reachable server (e.g. 503 key not configured)
+
+      // Parse error body safely without exposing sensitive data
       const errBody = await response.json().catch(() => ({}));
-      throw new Error(`Server error ${response.status}: ${errBody?.error || 'Unknown'}`);
+
+      if (response.status === 401) {
+        throw new Error(`Authentication failed (${response.status}): ${errBody?.error || 'Invalid or expired session'}`);
+      }
+      if (response.status === 429) {
+        throw new Error(`Usage limit exceeded (${response.status}): ${errBody?.error || 'Too many requests'}`);
+      }
+
+      throw new Error(`Server error (${response.status}): ${errBody?.error || 'Unknown server error'}`);
     } catch (err) {
-      console.log(`[OCR] Proxy failed for ${baseUrl}: ${err.message}`);
+      // Do not log the authorization token in logs or console
+      console.warn(`[OCR] Proxy attempt failed for ${baseUrl}: ${err.message}`);
       lastError = err;
+
+      // If the error is 401 (Authentication failed), do not retry all fallback URLs with the same invalid token
+      if (err.message && err.message.includes('Authentication failed (401)')) {
+        break;
+      }
     }
   }
 

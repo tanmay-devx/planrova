@@ -244,52 +244,82 @@ export function resolveSyncConflict(key, localRecord, cloudData) {
     'hydration_logs', 
     'notes', 
     'notes_drafts', 
-    'brain_dump'
+    'brain_dump',
+    'projects',
+    'budgets',
+    'savings_goals',
+    'recurring_bills',
+    'subscriptions',
+    'academic_semesters',
+    'academic_courses',
+    'academic_syllabus_topics',
+    'academic_assessments',
+    'academic_assignments',
+    'academic_flashcard_decks',
+    'academic_flashcards',
+    'academic_flashcard_reviews',
+    'academic_grading_scales'
   ];
 
-  if (collectionKeys.includes(key) && Array.isArray(localVal) && Array.isArray(cloudVal)) {
-    const uniqueIdKey = (key === 'notes') ? 'date' : 'id';
-    const mergedMap = new Map();
+  // Unlocked virtual seeds set union
+  if (key === 'unlocked_seeds') {
+    const localSeeds = Array.isArray(localVal) ? localVal : ['oak'];
+    const cloudSeeds = Array.isArray(cloudVal) ? cloudVal : ['oak'];
+    return Array.from(new Set([...localSeeds, ...cloudSeeds]));
+  }
 
-    // 1. Populate map with cloud items
-    cloudVal.forEach(item => {
-      if (item && item[uniqueIdKey]) {
-        mergedMap.set(item[uniqueIdKey], item);
-      }
-    });
+  if (Array.isArray(localVal) && Array.isArray(cloudVal)) {
+    const isKnownCollection = collectionKeys.includes(key) || key.startsWith('academic_') || key.startsWith('project_') || key.startsWith('planrova_');
+    const hasIdentifier = (localVal[0] && (localVal[0].id != null || localVal[0].date != null)) ||
+                          (cloudVal[0] && (cloudVal[0].id != null || cloudVal[0].date != null));
 
-    // 2. Merge local items with conflict resolution
-    localVal.forEach(item => {
-      if (item && item[uniqueIdKey]) {
-        const id = item[uniqueIdKey];
-        const cloudItem = mergedMap.get(id);
+    if (isKnownCollection || hasIdentifier) {
+      const uniqueIdKey = (key === 'notes' || (localVal[0] && localVal[0].date && !localVal[0].id)) ? 'date' : 'id';
+      const mergedMap = new Map();
 
-        if (cloudItem) {
-          // If either side explicitly marked as deleted with tombstone, keep deleted
-          if (cloudItem.deleted || item.deleted) {
-            mergedMap.set(id, { ...cloudItem, ...item, deleted: true });
-          } else {
-            // LWW per item based on updated_at
-            const cloudTimestamp = cloudItem.updated_at || 0;
-            const localTimestamp = item.updated_at || 0;
-            const winner = localTimestamp >= cloudTimestamp ? { ...cloudItem, ...item } : { ...item, ...cloudItem };
-
-            // Completion retention: if either side marked completed, preserve completed
-            if (cloudItem.completed || item.completed) {
-              winner.completed = true;
-            }
-
-            mergedMap.set(id, winner);
-          }
-        } else {
-          // Exists locally only
-          mergedMap.set(id, item);
+      // 1. Populate map with cloud items
+      cloudVal.forEach(item => {
+        if (item && item[uniqueIdKey] != null) {
+          mergedMap.set(item[uniqueIdKey], item);
         }
-      }
-    });
+      });
 
-    // Filter out deleted tombstones before returning active collection
-    return Array.from(mergedMap.values()).filter(item => !item.deleted);
+      // 2. Merge local items with conflict resolution
+      localVal.forEach(item => {
+        if (item && item[uniqueIdKey] != null) {
+          const id = item[uniqueIdKey];
+          const cloudItem = mergedMap.get(id);
+
+          if (cloudItem) {
+            // If either side explicitly marked as deleted with tombstone, keep deleted
+            if (cloudItem.deleted || item.deleted) {
+              mergedMap.set(id, { ...cloudItem, ...item, deleted: true });
+            } else {
+              // LWW per item based on updated_at
+              const cloudTimestamp = cloudItem.updated_at || 0;
+              const localTimestamp = item.updated_at || 0;
+              const winner = localTimestamp >= cloudTimestamp ? { ...cloudItem, ...item } : { ...item, ...cloudItem };
+
+              // Completion retention: if either side marked completed, preserve completed
+              if (cloudItem.completed || item.completed) {
+                winner.completed = true;
+              }
+
+              mergedMap.set(id, winner);
+            }
+          } else {
+            // Exists locally only
+            mergedMap.set(id, item);
+          }
+        }
+      });
+
+      // Filter out deleted tombstones before returning active collection
+      return Array.from(mergedMap.values()).filter(item => !item.deleted);
+    }
+
+    // Array without distinct element IDs: fall back to Last-Write-Wins based on record timestamp
+    return (cloudData.updated_at || 0) > (localRecord.updated_at || 0) ? cloudVal : localVal;
   }
 
   // Focus coins numeric merge

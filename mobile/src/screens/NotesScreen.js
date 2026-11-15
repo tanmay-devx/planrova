@@ -458,12 +458,16 @@ export default function NotesScreen() {
       setScanStep(0);
       setScanError(null);
     } catch (e) {
-      console.error('Whiteboard OCR failed:', e);
+      console.error('Whiteboard OCR failed:', e.message);
       clearTimeout(step2Timer);
       setIsScanning(false);
       setScanStep(0);
       if (e.message.includes('503') || e.message.includes('key not configured')) {
         setScanError('unavailable');
+      } else if (e.message.includes('Authentication') || e.message.includes('401') || e.message.includes('sign in')) {
+        setScanError('auth_required');
+      } else if (e.message.includes('limit') || e.message.includes('429')) {
+        setScanError('rate_limited');
       } else if (e.message.toLowerCase().includes('network') || e.message.toLowerCase().includes('proxy') || e.message.toLowerCase().includes('unreachable')) {
         setScanError('network_error');
       } else {
@@ -747,13 +751,17 @@ export default function NotesScreen() {
               ) : scanError ? (
                 <View style={{ alignItems: 'center', gap: 12 }}>
                   <Ionicons name="alert-circle-outline" size={48} color="#C47070" />
-                   <Text style={[styles.scannerStepText, { color: '#F3F1EC', textAlign: 'center', marginHorizontal: 16 }]}>
-                     {scanError === 'unavailable' 
-                       ? "Scan unavailable right now — try again later" 
-                       : scanError === 'network_error'
-                       ? "Groq Connection Failed: SSL/Network certification issue. Please verify internet access."
-                       : "Could not read image. Try again?"}
-                   </Text>
+                  <Text style={[styles.scannerStepText, { color: '#F3F1EC', textAlign: 'center', marginHorizontal: 16 }]}>
+                    {scanError === 'unavailable' 
+                      ? "Scan unavailable right now — try again later" 
+                      : scanError === 'auth_required'
+                      ? "Authentication required: Please sign in to scan notes."
+                      : scanError === 'rate_limited'
+                      ? "Daily OCR scan limit reached. Please try again tomorrow."
+                      : scanError === 'network_error'
+                      ? "Groq Connection Failed: SSL/Network certification issue. Please verify internet access."
+                      : "Could not read image. Try again?"}
+                  </Text>
                   <TouchableOpacity
                     style={[styles.modalActionBtn, { backgroundColor: '#C2A878', width: 200 }]}
                     onPress={() => runWhiteboardOcr(lastBase64)}

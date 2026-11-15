@@ -15,9 +15,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFirestoreData } from '../hooks/useFirestoreData';
 
 export default function ProjectsScreen() {
-  const { data: projects, setData: setProjects, loading: projectsLoading } = useFirestoreData('projects', []);
-  const { data: milestones, setData: setMilestones } = useFirestoreData('milestones', []);
-  const { data: tasks } = useFirestoreData('tasks', []);
+  const [projects = [], setProjects, projectsLoading = false] = useFirestoreData('projects', []);
+  const [milestones = [], setMilestones] = useFirestoreData('milestones', []);
+  const [tasks = []] = useFirestoreData('tasks', []);
 
   const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'in_progress', 'completed'
   const [modalVisible, setModalVisible] = useState(false);

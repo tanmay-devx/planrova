@@ -164,6 +164,29 @@ describe('Stage 1.1 & 1.2 — Server Proxy Cryptographic Authentication & Securi
       expect(result.error).toContain('Token issuer mismatch');
     });
 
+    it('rejects tokens with missing or invalid exp claim', async () => {
+      const noExpJWT = createSignedJWT({ exp: null });
+      const result = await verifyFirebaseToken(`Bearer ${noExpJWT}`, { publicKeys: testCertMap });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Token missing valid expiration claim');
+    });
+
+    it('rejects tokens with issued-at (iat) in the future', async () => {
+      const futureIatJWT = createSignedJWT();
+      const [h, p, s] = futureIatJWT.split('.');
+      const payloadObj = JSON.parse(Buffer.from(p, 'base64url').toString('utf8'));
+      payloadObj.iat = Math.floor(Date.now() / 1000) + 10000;
+      const forgedP = Buffer.from(JSON.stringify(payloadObj)).toString('base64url');
+      const sign = crypto.createSign('RSA-SHA256');
+      sign.update(`${h}.${forgedP}`);
+      const validSig = sign.sign(privateKey, 'base64url');
+      const futureToken = `${h}.${forgedP}.${validSig}`;
+
+      const result = await verifyFirebaseToken(`Bearer ${futureToken}`, { publicKeys: testCertMap });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Token issued in the future');
+    });
+
     it('rejects tokens with missing Authorization header or malformed Bearer', async () => {
       expect((await verifyFirebaseToken(null)).valid).toBe(false);
       expect((await verifyFirebaseToken('')).valid).toBe(false);

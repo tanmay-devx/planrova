@@ -581,12 +581,16 @@ export default function ScheduleScreen() {
       setShowImportReview(true);
       setScanError(null);
     } catch (e) {
-      console.error('Calendar OCR failed:', e);
+      console.error('Calendar OCR failed:', e.message);
       clearTimeout(step2Timer);
       clearTimeout(step3Timer);
       setIsImporting(false);
       if (e.message.includes('503') || e.message.includes('key not configured')) {
         setScanError('unavailable');
+      } else if (e.message.includes('Authentication') || e.message.includes('401') || e.message.includes('sign in')) {
+        setScanError('auth_required');
+      } else if (e.message.includes('limit') || e.message.includes('429')) {
+        setScanError('rate_limited');
       } else if (e.message.toLowerCase().includes('network') || e.message.toLowerCase().includes('proxy') || e.message.toLowerCase().includes('unreachable')) {
         setScanError('network_error');
       } else {
@@ -1151,6 +1155,10 @@ export default function ScheduleScreen() {
                 <Text style={[styles.scanningStatusTitle, { textAlign: 'center', marginHorizontal: 16 }]}>
                   {scanError === 'unavailable' 
                     ? "Scan unavailable right now — try again later" 
+                    : scanError === 'auth_required'
+                    ? "Authentication required: Please sign in to scan schedules."
+                    : scanError === 'rate_limited'
+                    ? "Daily OCR scan limit reached. Please try again tomorrow."
                     : scanError === 'network_error'
                     ? "Groq Connection Failed: SSL/Network certification issue. Please verify internet access."
                     : "Could not read image. Try again?"}

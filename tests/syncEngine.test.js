@@ -119,6 +119,59 @@ describe('Sync Engine Conflict Resolution & Data Integrity', () => {
       const merged = resolveSyncConflict('focus_coins', localRecord, cloudData);
       expect(merged).toBe(120);
     });
+
+    it('safely merges projects array without corrupting into object with numeric keys', () => {
+      const localRecord = {
+        id: 'projects',
+        value: JSON.stringify([{ id: 'p1', title: 'Local Project', updated_at: 100 }]),
+        updated_at: 100
+      };
+      const cloudData = {
+        id: 'projects',
+        value: JSON.stringify([{ id: 'p2', title: 'Cloud Project', updated_at: 120 }]),
+        updated_at: 120
+      };
+
+      const merged = resolveSyncConflict('projects', localRecord, cloudData);
+      expect(Array.isArray(merged)).toBe(true);
+      expect(merged.length).toBe(2);
+      expect(merged.some(p => p.id === 'p1')).toBe(true);
+      expect(merged.some(p => p.id === 'p2')).toBe(true);
+    });
+
+    it('safely merges academic_courses array across devices', () => {
+      const localRecord = {
+        id: 'academic_courses',
+        value: JSON.stringify([{ id: 'c1', name: 'CS 101', updated_at: 200 }]),
+        updated_at: 200
+      };
+      const cloudData = {
+        id: 'academic_courses',
+        value: JSON.stringify([{ id: 'c2', name: 'MATH 201', updated_at: 150 }]),
+        updated_at: 150
+      };
+
+      const merged = resolveSyncConflict('academic_courses', localRecord, cloudData);
+      expect(Array.isArray(merged)).toBe(true);
+      expect(merged.length).toBe(2);
+    });
+
+    it('falls back to LWW without object-spreading for unidentified arrays', () => {
+      const localRecord = {
+        id: 'simple_tags',
+        value: JSON.stringify(['alpha', 'beta']),
+        updated_at: 100
+      };
+      const cloudData = {
+        id: 'simple_tags',
+        value: JSON.stringify(['gamma', 'delta']),
+        updated_at: 200
+      };
+
+      const merged = resolveSyncConflict('simple_tags', localRecord, cloudData);
+      expect(Array.isArray(merged)).toBe(true);
+      expect(merged).toEqual(['gamma', 'delta']);
+    });
   });
 });
 

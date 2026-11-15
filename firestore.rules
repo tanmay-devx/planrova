@@ -76,6 +76,16 @@ service cloud.firestore {
       allow write: if isOwner(userId);
     }
 
+    // ── 5. Studypool Global Messages ─────────────────────────────────
+    match /studypool_messages/{messageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.text is string
+        && request.resource.data.text.size() <= 1000;
+      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
     // ── Default Deny ─────────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;

@@ -45,15 +45,26 @@ const userQuotaMap = new Map();
 let googlePublicKeysCache = null;
 let googlePublicKeysExpiresAt = 0;
 let testPublicKeys = null;
+let testGroqKey = null;
 
 export function setTestPublicKeys(keys) {
   testPublicKeys = keys;
+}
+
+export function setTestGroqKey(key) {
+  testGroqKey = key;
+}
+
+export function getGroqKey() {
+  if (testGroqKey !== null) return testGroqKey;
+  return process.env.GROQ_API_KEY || GROQ_KEY;
 }
 
 export function clearGooglePublicKeysCache() {
   googlePublicKeysCache = null;
   googlePublicKeysExpiresAt = 0;
   testPublicKeys = null;
+  testGroqKey = null;
 }
 
 /**
@@ -175,8 +186,17 @@ export async function verifyFirebaseToken(authHeader, options = {}) {
   }
 
   const nowSec = Math.floor(Date.now() / 1000);
-  if (typeof payload.exp === 'number' && payload.exp < nowSec) {
+  if (typeof payload.exp !== 'number') {
+    return { valid: false, error: 'Token missing valid expiration claim (exp)' };
+  }
+  if (payload.exp < nowSec) {
     return { valid: false, error: 'Token has expired' };
+  }
+  if (typeof payload.iat === 'number' && payload.iat > nowSec + 300) {
+    return { valid: false, error: 'Token issued in the future (iat)' };
+  }
+  if (typeof payload.auth_time === 'number' && payload.auth_time > nowSec + 300) {
+    return { valid: false, error: 'Token auth_time is in the future' };
   }
 
   const userId = payload.user_id || payload.sub;
@@ -185,8 +205,14 @@ export async function verifyFirebaseToken(authHeader, options = {}) {
   }
 
   // 5. Cryptographic Signature Verification
-  const certMap = options.publicKeys || (testPublicKeys || await getGooglePublicKeys());
-  const cert = certMap ? certMap[header.kid] : null;
+  let certMap = options.publicKeys || (testPublicKeys || await getGooglePublicKeys());
+  let cert = certMap ? certMap[header.kid] : null;
+
+  // Key rotation recovery: if kid is not in cached certs, force refresh once from Google
+  if (!cert && !options.publicKeys && !testPublicKeys) {
+    certMap = await getGooglePublicKeys(true);
+    cert = certMap ? certMap[header.kid] : null;
+  }
 
   if (!cert) {
     return { valid: false, error: `Public certificate not found for kid: ${header.kid}` };
@@ -339,7 +365,7 @@ function groqRequest(payload) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROQ_KEY}`,
+        'Authorization': `Bearer ${getGroqKey()}`,
         'Content-Length': Buffer.byteLength(body),
       },
     };
@@ -380,7 +406,7 @@ export const server = http.createServer(async (req, res) => {
     return sendJSON(res, 200, {
       status: 'ok',
       service: 'Planrova OCR & AI Proxy',
-      keyConfigured: Boolean(GROQ_KEY && GROQ_KEY !== 'your_groq_api_key_here'),
+      keyConfigured: Boolean(getGroqKey() && getGroqKey() !== 'your_groq_api_key_here'),
       timestamp: Date.now()
     });
   }
@@ -426,7 +452,7 @@ export const server = http.createServer(async (req, res) => {
       }, userLimitHeaders);
     }
 
-    if (!GROQ_KEY || GROQ_KEY === 'your_groq_api_key_here') {
+    if (!getGroqKey() || getGroqKey() === 'your_groq_api_key_here') {
       return sendJSON(res, 503, { 
         error: 'Groq API key not configured on server. Set GROQ_API_KEY in server/.env.' 
       }, userLimitHeaders);
@@ -480,7 +506,7 @@ If the user asks to create or schedule a task, suggest it clearly.`
 
   // 2. OCR Vision Proxy Endpoint
   if (req.method === 'POST' && req.url === '/api/ocr') {
-    // Check rate limit
+    // 1. IP rate limiting (20 scans per minute per client IP)
     const rateLimit = checkRateLimit(clientIP);
     const rateLimitHeaders = {
       'X-RateLimit-Limit': String(rateLimit.limit),
@@ -490,14 +516,40 @@ If the user asks to create or schedule a task, suggest it clearly.`
 
     if (!rateLimit.allowed) {
       return sendJSON(res, 429, { 
-        error: 'Too many requests. Please wait a moment before trying another OCR scan.' 
+        error: 'Too many requests from this IP address. Please wait a moment before trying another OCR scan.' 
       }, rateLimitHeaders);
     }
 
-    if (!GROQ_KEY || GROQ_KEY === 'your_groq_api_key_here') {
+    // 2. Cryptographic Firebase ID Token Verification
+    const authHeader = req.headers['authorization'];
+    const authResult = await verifyFirebaseToken(authHeader);
+    if (!authResult.valid) {
+      return sendJSON(res, 401, {
+        error: `Unauthorized: ${authResult.error}`
+      }, rateLimitHeaders);
+    }
+
+    // Identity is strictly derived from verified token (never from client body)
+    const verifiedUserId = authResult.userId;
+
+    // 3. Server-Side User Quota Check (Per-User Protection)
+    const userLimit = checkUserRateLimit(verifiedUserId);
+    const userLimitHeaders = {
+      ...rateLimitHeaders,
+      'X-UserRateLimit-Limit': String(userLimit.limit),
+      'X-UserRateLimit-Remaining': String(userLimit.remaining)
+    };
+
+    if (!userLimit.allowed) {
+      return sendJSON(res, 429, {
+        error: `Daily OCR scan limit reached for user (${userLimit.limit} scans/day). Limit resets tomorrow.`
+      }, userLimitHeaders);
+    }
+
+    if (!getGroqKey() || getGroqKey() === 'your_groq_api_key_here') {
       return sendJSON(res, 503, { 
         error: 'Groq API key not configured on server. Set GROQ_API_KEY in environment variables.' 
-      }, rateLimitHeaders);
+      }, userLimitHeaders);
     }
 
     let rawBody = '';
@@ -507,7 +559,7 @@ If the user asks to create or schedule a task, suggest it clearly.`
       bodyLength += chunk.length;
       if (bodyLength > MAX_BODY_SIZE) {
         req.destroy();
-        return sendJSON(res, 413, { error: 'Payload size exceeds 15MB limit' }, rateLimitHeaders);
+        return sendJSON(res, 413, { error: 'Payload size exceeds 15MB limit' }, userLimitHeaders);
       }
       rawBody += chunk;
     });
@@ -517,23 +569,23 @@ If the user asks to create or schedule a task, suggest it clearly.`
 
       const parsed = parseJSON(rawBody);
       if (!parsed || !parsed.payload || typeof parsed.payload !== 'object') {
-        return sendJSON(res, 400, { error: 'Invalid or missing "payload" in request body' }, rateLimitHeaders);
+        return sendJSON(res, 400, { error: 'Invalid or missing "payload" in request body' }, userLimitHeaders);
       }
 
       // Payload validation
       if (!Array.isArray(parsed.payload.messages) || parsed.payload.messages.length === 0) {
-        return sendJSON(res, 400, { error: 'Payload must contain a non-empty "messages" array' }, rateLimitHeaders);
+        return sendJSON(res, 400, { error: 'Payload must contain a non-empty "messages" array' }, userLimitHeaders);
       }
 
       try {
-        console.log(`[OCR Proxy] Processing ${parsed.type || 'scan'} request from ${clientIP}...`);
+        console.log(`[OCR Proxy] Processing ${parsed.type || 'scan'} request for user ${verifiedUserId} (IP: ${clientIP})...`);
         const result = await groqRequest(parsed.payload);
         const parsedResult = parseJSON(result.body);
-        console.log(`[OCR Proxy] Upstream status: ${result.status}`);
-        sendJSON(res, result.status, parsedResult || { raw: result.body }, rateLimitHeaders);
+        console.log(`[OCR Proxy] Upstream status: ${result.status} for user ${verifiedUserId}`);
+        sendJSON(res, result.status, parsedResult || { raw: result.body }, userLimitHeaders);
       } catch (err) {
         console.error('[OCR Proxy] Upstream request failed:', err.message);
-        sendJSON(res, 502, { error: 'Upstream OCR service failure: ' + err.message }, rateLimitHeaders);
+        sendJSON(res, 502, { error: 'Upstream OCR service failure: ' + err.message }, userLimitHeaders);
       }
     });
 

@@ -226,8 +226,8 @@ export function analyzeWellbeingProductivityCorrelation({
         id: `insight-wellbeing-prod-${Date.now()}`,
         type: INSIGHT_TYPES.WELLBEING_PRODUCTIVITY_CORRELATION,
         domain: INSIGHT_DOMAINS.WELLBEING,
-        title: 'Hydration Significantly Boosts Daily Task Throughput',
-        evidence: `On days you met your hydration target (${targetMl}ml+), task completion rate averaged ${hydratedAvg.toFixed(1)}% compared to ${dehydratedAvg.toFixed(1)}% on low-intake days (+${delta.toFixed(1)}% productivity boost).`,
+        title: 'Hydration Target Achievement Correlates with Higher Task Completion',
+        evidence: `On days you met your hydration target (${targetMl}ml+), task completion rate averaged ${hydratedAvg.toFixed(1)}% compared to ${dehydratedAvg.toFixed(1)}% on low-intake days (observed difference: +${delta.toFixed(1)}%).`,
         dataPoints: {
           hydratedAvgPct: Number(hydratedAvg.toFixed(1)),
           dehydratedAvgPct: Number(dehydratedAvg.toFixed(1)),
