@@ -110,14 +110,14 @@ $ cd mobile && npx eas-cli build --platform android --profile preview --non-inte
 ✔ Uploaded to EAS 6s
 ✔ Computed project fingerprint
 
-See logs: https://expo.dev/accounts/tanmay041/projects/mobile/builds/54b46217-7e84-462c-8987-7fcd2569ca46
+See logs: https://expo.dev/accounts/tanmay041/projects/mobile/builds/b1148cb6-13fe-488f-b93c-1fa802993a4b
 ```
 
 ### 4.3 Live Build Record
 
 | Attribute | Value |
 | :--- | :--- |
-| **Build ID** | `54b46217-7e84-462c-8987-7fcd2569ca46` |
+| **Build ID** | `b1148cb6-13fe-488f-b93c-1fa802993a4b` |
 | **Account / Owner** | `tanmay041` (`tanmayagrawal001@gmail.com`) |
 | **Project** | `@tanmay041/mobile` |
 | **Platform** | Android |
@@ -125,10 +125,10 @@ See logs: https://expo.dev/accounts/tanmay041/projects/mobile/builds/54b46217-7e
 | **Target Artifact** | Signed `.apk` (Direct Device Sideloading) |
 | **SDK Version** | `58.0.0` |
 | **Runtime Version** | `1.0.0` |
-| **Git Commit** | `c6740a3b98b15329e78bf4a7e71cabccb6fc3124` |
+| **Git Commit** | `239ad8600a1288e3a95a5e3ae363a8b9d1eadab7` |
 | **Keystore** | Remote Keystore `Build Credentials v-uy31pqKJ (default)` |
-| **Status** | **In Progress (Gradle 9.4.1 compilation on EAS Cloud Worker)** |
-| **Live Build Logs** | [https://expo.dev/accounts/tanmay041/projects/mobile/builds/54b46217-7e84-462c-8987-7fcd2569ca46](https://expo.dev/accounts/tanmay041/projects/mobile/builds/54b46217-7e84-462c-8987-7fcd2569ca46) |
+| **Status** | **In Progress (Compiling on EAS Cloud Worker with AGP 9 Kotlin Fix)** |
+| **Live Build Logs** | [https://expo.dev/accounts/tanmay041/projects/mobile/builds/b1148cb6-13fe-488f-b93c-1fa802993a4b](https://expo.dev/accounts/tanmay041/projects/mobile/builds/b1148cb6-13fe-488f-b93c-1fa802993a4b) |
 
 ---
 
