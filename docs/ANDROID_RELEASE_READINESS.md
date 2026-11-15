@@ -110,14 +110,14 @@ $ cd mobile && npx eas-cli build --platform android --profile preview --non-inte
 ✔ Uploaded to EAS 6s
 ✔ Computed project fingerprint
 
-See logs: https://expo.dev/accounts/tanmay041/projects/mobile/builds/aa2e04f7-e18c-48b2-92cc-cc4e6c3fd445
+See logs: https://expo.dev/accounts/tanmay041/projects/mobile/builds/06a3bf58-7dc0-4726-bd50-9546f15d4c71
 ```
 
 ### 4.3 Live Build Record
 
 | Attribute | Value |
 | :--- | :--- |
-| **Build ID** | `aa2e04f7-e18c-48b2-92cc-cc4e6c3fd445` |
+| **Build ID** | `06a3bf58-7dc0-4726-bd50-9546f15d4c71` |
 | **Account / Owner** | `tanmay041` (`tanmayagrawal001@gmail.com`) |
 | **Project** | `@tanmay041/mobile` |
 | **Platform** | Android |
@@ -125,10 +125,10 @@ See logs: https://expo.dev/accounts/tanmay041/projects/mobile/builds/aa2e04f7-e1
 | **Target Artifact** | Signed `.apk` (Direct Device Sideloading) |
 | **SDK Version** | `58.0.0` |
 | **Runtime Version** | `1.0.0` |
-| **Git Commit** | `e7291bba69d30d1d643d9aa6612df595b11ba9e7` |
+| **Git Commit** | `0c25714041b3e809da7582b13bf714aa0c82fe3b` |
 | **Keystore** | Remote Keystore `Build Credentials v-uy31pqKJ (default)` |
-| **Status** | **In Progress (Clean Standalone Release Build without dev-client)** |
-| **Live Build Logs** | [https://expo.dev/accounts/tanmay041/projects/mobile/builds/aa2e04f7-e18c-48b2-92cc-cc4e6c3fd445](https://expo.dev/accounts/tanmay041/projects/mobile/builds/aa2e04f7-e18c-48b2-92cc-cc4e6c3fd445) |
+| **Status** | **In Progress (Full RN 0.88 + hermes-compiler standalone build)** |
+| **Live Build Logs** | [https://expo.dev/accounts/tanmay041/projects/mobile/builds/06a3bf58-7dc0-4726-bd50-9546f15d4c71](https://expo.dev/accounts/tanmay041/projects/mobile/builds/06a3bf58-7dc0-4726-bd50-9546f15d4c71) |
 
 ---
 
