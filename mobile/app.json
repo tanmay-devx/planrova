@@ -3,6 +3,7 @@
     "name": "Planrova",
     "slug": "mobile",
     "version": "1.0.0",
+    "sdkVersion": "58.0.0",
     "description": "Planrova — The student productivity workspace. Track tasks, focus sessions, hydration, habits and budget — built for school and college students.",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -78,7 +79,9 @@
       "expo-asset"
     ],
     "owner": "tanmay041",
-    "runtimeVersion": "1.0.0",
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
     "updates": {
       "url": "https://u.expo.dev/1a1b4d70-c3e4-4770-aede-2c5a0f3b0b3e"
     }
