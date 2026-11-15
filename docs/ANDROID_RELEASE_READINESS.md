@@ -4,20 +4,20 @@
 **Report Date:** November 15, 2026  
 **Auditor / Engineering Lead:** Mobile & Release Engineering  
 **Release Target:** Android (Internal QA APK & Play Store AAB)  
-**Status:** **BUILD-BLOCKED ON CREDENTIALS (Documented Blocker)** | **CONFIG & CODE APPROVED**
+**Status:** **BUILD EXECUTING ON EAS CLOUD (APK Generation In Progress)** | **CONFIG & NATIVE CODE VERIFIED**
 
 ---
 
 ## 1. Executive Summary
 
-As required by **P3** of the Planrova Release Roadmap, Planrova 2.0 mobile project has been systematically inspected, hardened, and prepared for Android device distribution. 
+As required by **P3** of the Planrova Release Roadmap, Planrova 2.0 mobile project has been systematically inspected, hardened, upgraded to Expo SDK 58, and submitted to EAS for real device APK compilation. 
 
 ### Key Findings & Status:
-1. **Architecture & Native Configuration Verified:** Expo SDK 54 (`~54.0.35`), React Native `0.81.5`, React `19.1.0`, Hermes JS engine (`hermesEnabled=true`), New Architecture disabled (`newArchEnabled=false` matching custom Kotlin native modules), and application ID `com.planrova.app`.
+1. **Architecture & Native Configuration Verified:** Expo SDK 58 (`~58.0.25`), React Native `0.88.1`, React `19.3.0`, Hermes JS engine (`hermesEnabled=true`), New Architecture disabled (`newArchEnabled=false` matching custom Kotlin native modules), and application ID `com.planrova.app`.
 2. **Custom Kotlin Native Alarm Bridge Compatible:** Inspected custom native Alarm module ([AlarmModule.kt](file:///home/tanmay/Videos/planrova/mobile/android/app/src/main/java/com/planrova/app/AlarmModule.kt), [AlarmScheduler.kt](file:///home/tanmay/Videos/planrova/mobile/android/app/src/main/java/com/planrova/app/AlarmScheduler.kt), [AlarmService.kt](file:///home/tanmay/Videos/planrova/mobile/android/app/src/main/java/com/planrova/app/AlarmService.kt), [BootReceiver.kt](file:///home/tanmay/Videos/planrova/mobile/android/app/src/main/java/com/planrova/app/BootReceiver.kt), [AlarmActivity.kt](file:///home/tanmay/Videos/planrova/mobile/android/app/src/main/java/com/planrova/app/AlarmActivity.kt)) and confirmed registration in [MainApplication.kt](file:///home/tanmay/Videos/planrova/mobile/android/app/src/main/java/com/planrova/app/MainApplication.kt) with required permissions (`SCHEDULE_EXACT_ALARM`, `USE_EXACT_ALARM`, `USE_FULL_SCREEN_INTENT`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`).
 3. **EAS Build Configured:** Hardened [mobile/eas.json](file:///home/tanmay/Videos/planrova/mobile/eas.json) declaring `development` (internal APK with dev client), `preview` (standalone internal testing APK), and `production` (Google Play Store AAB) build profiles.
-4. **Build Execution Attempted & Exact Blocker Captured:** Attempted EAS cloud build (`npx eas build --platform android --profile preview --non-interactive`). The build halted because an active Expo user authentication (`EXPO_TOKEN` or interactive `eas login`) is required by Expo Application Services for project `1a1b4d70-c3e4-4770-aede-2c5a0f3b0b3e` (owner `tanmay041`). Local build fallback (`eas build --local` / `./gradlew assembleRelease`) cannot execute in this environment due to the absence of the Android SDK (`ANDROID_HOME`).
-5. **Rule of Integrity:** Adhering strictly to the master mandate (*"Do not claim an Android release is complete until an actual build artifact has been generated and verified"*), the Android release is marked as **BLOCKED ON CLOUD CREDENTIALS**.
+4. **Live EAS Build Executing:** Successfully authenticated with Expo account `tanmay041` (`tanmayagrawal001@gmail.com`) and dispatched build `951fbc86-59a4-4721-9897-82e0db913c29` under the `preview` profile targeting a standalone installable APK (`com.planrova.app`). Project files compressed (56.2 MB) and uploaded to remote EAS builders.
+5. **Rule of Integrity:** Adhering strictly to the master mandate (*"Do not claim an Android release is complete until an actual build artifact has been generated and verified"*), the Android release tracking is live with real-time build ID and monitoring URL.
 6. **Firestore & Security Emulation Verified:** Configured [firebase.json](file:///home/tanmay/Videos/planrova/firebase.json) with Auth, Firestore, and UI emulator ports. Added conditional emulator hook in [mobile/src/firebase.js](file:///home/tanmay/Videos/planrova/mobile/src/firebase.js). Verified all Firestore security contracts in [tests/firestoreRulesSimulation.test.js](file:///home/tanmay/Videos/planrova/tests/firestoreRulesSimulation.test.js) (11 tests passing).
 
 ---
@@ -99,34 +99,36 @@ The build configuration is formalized in [mobile/eas.json](file:///home/tanmay/V
 
 ### 4.1 Invocation Log
 ```bash
-$ cd mobile && npx eas build --platform android --profile preview --non-interactive
+$ cd mobile && npx eas-cli build --platform android --profile preview --non-interactive --no-wait
 ```
 
 ### 4.2 Raw Terminal Output
+```text
+✔ Using remote Android credentials (Expo server)
+✔ Using Keystore from configuration: Build Credentials v-uy31pqKJ (default)
+✔ Compressed project files 1s (56.2 MB)
+✔ Uploaded to EAS 7s
+✔ Computed project fingerprint
+
+See logs: https://expo.dev/accounts/tanmay041/projects/mobile/builds/951fbc86-59a4-4721-9897-82e0db913c29
 ```
-An Expo user account is required to proceed.
-Either log in with eas login or set the EXPO_TOKEN environment variable if you're using EAS CLI on CI (Learn more: https://docs.expo.dev/accounts/programmatic-access/)
-    Error: build command failed.
-```
 
-### 4.3 Root Cause Analysis & Blocker Specification
+### 4.3 Live Build Record
 
-| Dimension | Observed State | Required State | Exact Blocker |
-| :--- | :--- | :--- | :--- |
-| **EAS Authentication** | `whoami: Not logged in` | Active EAS CLI session or `EXPO_TOKEN` | **EAS Cloud Token Missing:** Expo Application Services rejects non-interactive builds without valid owner credentials for project `tanmay041/mobile`. |
-| **Host Android SDK** | No `ANDROID_HOME`, no `Android/Sdk` | Android SDK API 35 + Build Tools 35.0.0 | **Local SDK Missing:** Cannot fallback to local Gradle assembly (`eas build --local` or `./gradlew assembleRelease`) on this Linux host environment. |
-
-### 4.4 Resolution Path to Generate Actual Artifact:
-To trigger the automated cloud compilation and receive the downloadable APK URL:
-1. Export a valid Expo token with build permissions for owner `tanmay041`:
-   ```bash
-   export EXPO_TOKEN="<your-expo-access-token>"
-   ```
-2. Re-run the EAS build command:
-   ```bash
-   cd mobile && npx eas build --platform android --profile preview --non-interactive
-   ```
-3. EAS will queue worker VM, compile the native Kotlin alarm modules, package the Hermes bundle, and output the artifact download URL (e.g. `https://expo.dev/artifacts/eas/...apk`).
+| Attribute | Value |
+| :--- | :--- |
+| **Build ID** | `951fbc86-59a4-4721-9897-82e0db913c29` |
+| **Account / Owner** | `tanmay041` (`tanmayagrawal001@gmail.com`) |
+| **Project** | `@tanmay041/mobile` |
+| **Platform** | Android |
+| **Build Profile** | `preview` (Standalone Internal Testing APK) |
+| **Target Artifact** | Signed `.apk` (Direct Device Sideloading) |
+| **SDK Version** | `58.0.0` |
+| **Runtime Version** | `1.0.0` |
+| **Git Commit** | `e4efeaf7276b2bddb80880d43d614bbf8d2a8c08` |
+| **Keystore** | Remote Keystore `Build Credentials v-uy31pqKJ (default)` |
+| **Status** | **In Progress / Queued on EAS Build Cloud Workers** |
+| **Live Build Logs** | [https://expo.dev/accounts/tanmay041/projects/mobile/builds/951fbc86-59a4-4721-9897-82e0db913c29](https://expo.dev/accounts/tanmay041/projects/mobile/builds/951fbc86-59a4-4721-9897-82e0db913c29) |
 
 ---
 
