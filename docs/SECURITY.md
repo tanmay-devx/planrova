@@ -12,6 +12,7 @@
 | :--- | :---: | :--- | :--- |
 | **API Key Leakage in Client Code** | Critical | Client code contains zero AI API keys. Upstream requests are proxied via `server/proxy.js` using server-side environment variables. | Verified in `server/proxy.js` & `tests/proxySecurity.test.js`. |
 | **Unauthenticated AI Proxy Access** | Critical | Server validates Firebase Bearer ID tokens on `/api/ai/chat`, checking JWT structure, audience (`planory-b8838`), issuer, and expiry. Unauthenticated calls return HTTP 401. | Verified in `tests/proxySecurity.test.js` (15 tests). |
+| **Unauthenticated OCR Proxy Access** | High | Server validates Firebase Bearer ID tokens on `/api/ocr` via `verifyFirebaseToken`. Mobile client attaches ID token via `callOcrProxy`. Unauthenticated calls return HTTP 401. | Verified in `tests/ocrAuth.test.js` (12 tests). |
 | **Identity Spoofing in AI Requests** | High | User identity is strictly derived from verified token claims. Client-supplied `userId` parameters in query or body are discarded. | Verified in `tests/proxySecurity.test.js`. |
 | **API Quota Abuse & Cost Exhaustion**| High | Server enforces user-scoped daily sliding window rate limits (30 reqs/day) in addition to IP sliding window limits (20 reqs/min). Exceeding quota returns HTTP 429. | Verified in `tests/proxySecurity.test.js`. |
 | **Oversized / DoS Payloads** | Medium | Server enforces strict payload bounds: prompt $\le 5000$ chars, context $\le 8000$ chars. Oversized requests return HTTP 413. | Verified in `tests/proxySecurity.test.js`. |
@@ -26,22 +27,22 @@
 
 ## 2. Server-Side Authentication & Access Control (`server/proxy.js`)
 
-The Node.js HTTP proxy (`server/proxy.js`) acts as an authenticated security gatekeeper:
+The Node.js HTTP proxy (`server/proxy.js`) acts as an authenticated security gatekeeper across both `/api/ai/chat` and `/api/ocr`:
 
 1. **`verifyFirebaseToken(authHeader)`**:
    - Parses `Authorization: Bearer <token>`.
-   - Validates JWT header, payload, project audience (`planory-b8838`), issuer (`https://securetoken.google.com/planory-b8838`), and expiration timestamp.
-   - Rejects unauthenticated or tampered calls with `HTTP 401 Unauthorized { error: 'Authentication required' }`.
-   - Supports deterministic test tokens (`test_token_<userId>`) for automated CI suites.
+   - Validates JWT header, algorithm pinning (`RS256`), cryptographic signature against Google's public certificates, project audience (`planory-b8838`), issuer (`https://securetoken.google.com/planory-b8838`), non-future issuance (`iat <= now + 300`), and expiration timestamp (`exp`).
+   - Rejects unauthenticated or tampered calls with `HTTP 401 Unauthorized { error: 'Unauthorized: ...' }`.
+   - Supports deterministic test tokens (`test_token_<userId>`) strictly confined to `process.env.NODE_ENV === 'test'`.
 2. **Dual-Tier Sliding-Window Rate Limiting**:
-   - **IP-Level Limit:** 20 requests per 60 seconds per IP address to defend against DDoS attacks.
-   - **User-Level Quota:** 30 requests per 24 hours per verified `userId` to prevent quota abuse and LLM bill exhaustion.
-3. **Payload Sanitization & Bounds Checking (`validateAIRequestPayload`)**:
-   - Validates that `prompt` is a string with length $\le 5,000$ characters.
-   - Validates that `context` is a string with length $\le 8,000$ characters.
-   - Rejects oversized requests with `HTTP 413 Payload Too Large`.
+   - **IP-Level Limit:** 20 requests per 60 seconds per IP address to defend against DDoS attacks across both AI and OCR endpoints.
+   - **User-Level Quota:** 30 requests per 24 hours per verified `userId` to prevent quota abuse and LLM/Vision bill exhaustion.
+3. **Payload Sanitization & Bounds Checking**:
+   - `/api/ai/chat`: Validates that `prompt` is $\le 5,000$ characters and `context` is $\le 8,000$ characters (rejects oversized with HTTP 413).
+   - `/api/ocr`: Enforces a 15MB hard ceiling on base64 vision images (`MAX_BODY_SIZE`) and validates non-empty `messages` arrays.
 4. **Client Auth Propagation**:
-   - `shared/domain/ai/ai.provider.js` (`BackendAIProxyProvider`) accepts `getAuthToken` resolver and injects `Authorization: Bearer <token>`. In Web (`src/modules/ai/ai.ui.js`), this is bound to `auth.currentUser?.getIdToken()`.
+   - **Web:** `shared/domain/ai/ai.provider.js` (`BackendAIProxyProvider`) accepts `getAuthToken` resolver and injects `Authorization: Bearer <token>`, bound to `auth.currentUser?.getIdToken()`.
+   - **Mobile:** `mobile/src/config/api.js` (`callOcrProxy`) resolves the user's ID token via `getAuthToken()` from Firebase Auth, attaching `Authorization: Bearer <token>` and gracefully handling 401 and 429 states without token leakage in logs.
 
 ---
 

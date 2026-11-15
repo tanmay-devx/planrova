@@ -70,7 +70,10 @@ As part of our commitment to transparent and zero-technical-debt engineering, th
 ### 4.4 AI Server Proxy Authentication & Quota Hardening
 - **Resolution**: Identified during audit that `server/proxy.js` lacked token authentication. Resolved by adding `verifyFirebaseToken()` to validate Firebase Bearer ID tokens and reject unauthenticated requests, adding `checkUserRateLimit()` to enforce a 30 req/day per-user quota on the backend, and enforcing payload size constraints ($\le 5000$ chars prompt, $\le 8000$ chars context). Client provider was updated to pass the user's ID token. Proposal execution was hardened with `expectedUserId` checks.
 
-### 4.5 Remaining Environmental Constraints
+### 4.5 P1 OCR Proxy Authentication Hardening
+- **Resolution**: Unauthenticated access to `/api/ocr` has been resolved. The endpoint now enforces `verifyFirebaseToken()` cryptographic signature checking, user quota limits (30 scans/day), and IP rate limits (20 req/min). Mobile client `mobile/src/config/api.js` was upgraded to attach Firebase ID tokens via `getAuthToken()`, and screen error handlers in `NotesScreen.js` and `ScheduleScreen.js` were updated to handle 401 unauthenticated and 429 rate-limited states gracefully without token exposure. Verified via `tests/ocrAuth.test.js` (12 tests).
+
+### 4.6 Remaining Environmental Constraints
 - **Limitation**: Native Android Gradle APK packaging and physical device touch validation remain unverified due to lack of Android SDK/virtualization in this container. React Native code syntax was verified with `node --check`.
 - **Limitation**: Live Firebase CLI emulator suite was not run; Firestore rules were verified via in-memory AST evaluation tests.
 - **Limitation**: Initial cold page load preloads `vendor-firebase-*.js` (~412 kB) because Firebase Auth is initialized eagerly on boot; true on-demand lazy auth initialization is slated for Phase 7.

@@ -13,14 +13,15 @@
 
 ### **VERDICT: READY WITH DOCUMENTED LIMITATIONS**
 
-Planrova 2.0 demonstrates high engineering rigor across its core web architecture, local-first database persistence, cryptographic proxy authentication, and deterministic cross-domain analytics. The production web application compiles cleanly with zero warnings, executes 413 unit and integration tests with a 100% pass rate across 55 test suites, and enforces strict tenant isolation at both the database and proxy layers.
+Planrova 2.0 demonstrates high engineering rigor across its core web architecture, local-first database persistence, cryptographic proxy authentication, and deterministic cross-domain analytics. The production web application compiles cleanly with zero warnings, executes 425 unit and integration tests with a 100% pass rate across 56 test suites, and enforces strict tenant isolation at both the database and proxy layers.
 
-However, release to general production must observe **four documented operational limitations**:
+However, release to general production must observe **three documented operational limitations**:
 
 1. **Mobile Build Infrastructure:** The repository contains a complete, well-structured Expo / React Native codebase with verified offline persistence, but this specific environment lacks the native Android SDK (`ANDROID_HOME`), Gradle daemon cache, and `mobile/node_modules`. Native mobile artifacts (`.apk` / `.aab`) must be compiled in a dedicated CI/CD pipeline (e.g., Expo Application Services (EAS) Build or GitHub Actions) rather than locally.
-2. **OCR Vision Proxy Authentication Decoupling:** While `/api/ai/chat` enforces strict Firebase ID token verification and user daily rate limits, `/api/ocr` remains protected only by IP-based sliding-window rate limiting (20 req/min) to accommodate existing mobile client architecture. An authenticated token requirement should be unified across all endpoints before public exposure.
-3. **Vitest Coverage Instrumentation:** Vitest is configured without `@vitest/coverage-v8` installed in `node_modules`. While 413 tests pass deterministically, automated statement and branch coverage percentages cannot be programmatically generated in offline sandbox environments without network installation.
-4. **Cloud Firestore Security Rule Alignment:** Application writes to the root collection `studypool_messages` required alignment in `firestore.rules`, which originally only permitted room-scoped subcollection messages (`/studypool_rooms/{roomId}/messages/{messageId}`). This has been remediated and verified.
+2. **Vitest Coverage Instrumentation:** Vitest is configured without `@vitest/coverage-v8` installed in `node_modules`. While 425 tests pass deterministically, automated statement and branch coverage percentages cannot be programmatically generated in offline sandbox environments without network installation.
+3. **Firestore Live Emulator vs In-Memory AST Simulation:** Firestore security rules are verified structurally and behaviorally via automated AST simulation suites, while end-to-end integration with live cloud emulators is reserved for cloud CI staging.
+
+*(Note: The previous P1 limitation regarding OCR proxy authentication decoupling has been completely resolved and cryptographically verified).*
 
 ---
 
@@ -45,10 +46,16 @@ The proxy server acts as a zero-dependency Node.js reverse proxy shielding third
 5. **Test Token Isolation:** `test_token_*` identifiers are strictly confined to `process.env.NODE_ENV === 'test'`. In `production`, `development`, or `undefined` environments, test tokens are rejected immediately.
 6. **Identity & Quota Derivation:** User identity is extracted exclusively from verified cryptographic claims. Client-supplied user IDs in request bodies are ignored. Sliding-window server quotas enforce a hard ceiling of 30 AI requests per day per authenticated user.
 
-### 1.2 Identified Security Findings
-- **Finding SEC-1 (High Severity — Architectural Inconsistency):** 
-  `/api/ocr` (lines 482–540) does not invoke `verifyFirebaseToken`. While `/api/ai/chat` enforces token verification, `/api/ocr` only checks IP rate limits (20 req/min). This was designed because `mobile/src/config/api.js` currently invokes `/api/ocr` without attaching the user's Firebase Bearer token.
-  - *Remediation Plan:* Update `mobile/src/config/api.js` to pass `Authorization: Bearer <token>` and enable `verifyFirebaseToken` on `/api/ocr`.
+### 1.2 Identified Security Findings & Remediations
+- **Finding SEC-1 (Remediated & Verified — P1 Milestone):** 
+  Originally, `/api/ocr` lacked Firebase authentication check and user rate limiting, relying only on IP rate limiting (20 req/min). 
+  - *Remediation Applied:*
+    1. Enforced `verifyFirebaseToken` on `/api/ocr` in [`server/proxy.js`](file:///home/tanmay/Videos/planrova/server/proxy.js).
+    2. Derived user identity strictly from verified token claims; body-supplied user IDs are discarded.
+    3. Enforced dual-tier rate limiting: IP-level (20 req/min) and user-level daily quotas (30 scans/day).
+    4. Updated mobile client [`mobile/src/config/api.js`](file:///home/tanmay/Videos/planrova/mobile/src/config/api.js) (`callOcrProxy`) to obtain the authenticated Firebase ID token and attach `Authorization: Bearer <token>`.
+    5. Handled 401 unauthenticated and 429 rate-limited states gracefully in [`mobile/src/screens/NotesScreen.js`](file:///home/tanmay/Videos/planrova/mobile/src/screens/NotesScreen.js) and [`mobile/src/screens/ScheduleScreen.js`](file:///home/tanmay/Videos/planrova/mobile/src/screens/ScheduleScreen.js) with zero token exposure in logs or error messages.
+    6. Added comprehensive automated regression tests in [`tests/ocrAuth.test.js`](file:///home/tanmay/Videos/planrova/tests/ocrAuth.test.js) (12 tests, 100% pass rate).
 - **Finding SEC-2 (Remediated — Medium Severity):**
   Tokens missing `exp` or with future timestamps (`iat > now + 300`) were not strictly checked. 
   - *Remediation Applied:* Enforced mandatory `exp` type check and future timestamp rejection in `server/proxy.js`. Verified via 2 new test cases in `tests/proxySecurity.test.js`.
@@ -197,10 +204,10 @@ dist/assets/index-B3yBpjw1.js             523.41 kB │ gzip: 149.33 kB
 ## 7. TESTING & COVERAGE VERIFICATION
 
 ### 7.1 Automated Test Suite Execution
-- **Test Runner:** Vitest v5.1.0 (55 concurrent worker threads)
+- **Test Runner:** Vitest v5.1.0 (56 concurrent worker threads)
 - **Execution Command:** `npm test` (`vitest run`)
-- **Execution Duration:** 1.47 seconds
-- **Pass Rate:** **100% (413 passed, 0 failed, 0 skipped)**
+- **Execution Duration:** 1.60 seconds
+- **Pass Rate:** **100% (425 passed, 0 failed, 0 skipped)**
 
 ### 7.2 Breakdown of Test Files by Domain
 - **Core Domain & Engine:** 15 suites (date, validation, nlp, commandCenter, universalSearch, domain, migrations, etc.)
@@ -209,7 +216,7 @@ dist/assets/index-B3yBpjw1.js             523.41 kB │ gzip: 149.33 kB
 - **Wellbeing Domain (Phase 5):** 4 suites (`wellbeingStage6` through `wellbeingStage8`)
 - **AI & Insights (Phase 6):** 3 suites (`aiInsights`, `phase6AI`, `phase6ContextAudit`)
 - **Sync & Storage (Phase 6/Stages 0–10):** 6 suites (`syncEngine`, `syncTransparency`, `accountIsolation`, `habitsSync`, `mobileStorage`, `phase6Reliability`)
-- **Security & Proxy (Phase 6/Stages 1–2):** 2 suites (`proxySecurity`, `proxy`)
+- **Security & Proxy (Phase 6/Stages 1–2 & P1):** 3 suites (`proxySecurity`, `proxy`, `ocrAuth`)
 - **Mobile Integration:** 2 suites (`mobileScreens`, `mobileStorage`)
 - **Projects & PWA:** 2 suites (`projectsDomain`, `pwa`)
 - **Scheduling Engine:** 4 suites (`schedulingStage2`, `schedulingStage3`, `schedulingStage4`, `schedulingStage5`, `schedulingStage7`)
@@ -217,7 +224,7 @@ dist/assets/index-B3yBpjw1.js             523.41 kB │ gzip: 149.33 kB
 ### 7.3 Coverage Instrumentation Reality Check
 - Prior documentation in `docs/ROADMAP.md` claimed "100% test coverage for synchronization and storage integrity."
 - **Independent Verification:** The root `package.json` does not include `@vitest/coverage-v8` or `@vitest/coverage-istanbul`. In this isolated sandbox without package installation, running `vitest run --coverage` fails on a missing dependency.
-- **Audit Conclusion:** Any prior claims of specific percentage figures (e.g., statement or branch coverage percentages) were heuristic estimates rather than instrumented test reports. While test coverage across core business logic is broad and high quality (413 deterministic assertions), formal coverage metrics must be generated via a CI workflow with `@vitest/coverage-v8` installed.
+- **Audit Conclusion:** Any prior claims of specific percentage figures (e.g., statement or branch coverage percentages) were heuristic estimates rather than instrumented test reports. While test coverage across core business logic is broad and high quality (425 deterministic assertions across 56 suites), formal coverage metrics must be generated via a CI workflow with `@vitest/coverage-v8` installed.
 
 ---
 
@@ -225,10 +232,10 @@ dist/assets/index-B3yBpjw1.js             523.41 kB │ gzip: 149.33 kB
 
 | Priority | Dimension | Finding | Current State | Target Remediation |
 | :--- | :--- | :--- | :--- | :--- |
-| **P1 — High** | Security | `/api/ocr` unauthenticated | Only protected by IP rate limit (20 req/min) | Update mobile client to attach Bearer token; enforce `verifyFirebaseToken` on `/api/ocr`. |
-| **P2 — Medium** | DevOps / QA | Missing coverage tooling | `@vitest/coverage-v8` not in `package.json` | Add `@vitest/coverage-v8` to `devDependencies` and configure Vitest coverage thresholds. |
-| **P3 — Medium** | Release Eng | Native mobile builds | No Android SDK in dev container | Configure GitHub Actions or EAS Build pipeline to automate APK/AAB builds. |
-| **P4 — Low** | Intelligence | Heuristic confidence | Static confidence weights (0.84–0.95) | Calculate confidence dynamically using sample size and standard deviation. |
+| **P1 — High** | Security | `/api/ocr` unauthenticated | **RESOLVED & VERIFIED** | Cryptographic token verification, user quota, IP rate limiting, and mobile token attachment enforced (`tests/ocrAuth.test.js`). |
+| **P2 — Medium** | DevOps / QA | Missing coverage tooling | Open | Add `@vitest/coverage-v8` to `devDependencies` and configure Vitest coverage thresholds in CI. |
+| **P3 — Medium** | Release Eng | Native mobile builds | Open | Configure GitHub Actions or EAS Build pipeline to automate APK/AAB builds with Android SDK. |
+| **P4 — Low** | Intelligence | Heuristic confidence | Open | Calculate confidence dynamically using sample size and standard deviation. |
 
 ---
 
