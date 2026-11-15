@@ -20,5 +20,30 @@ allprojects {
   }
 }
 
+subprojects { project ->
+  if (project.name == 'react-native-async-storage_async-storage') {
+    afterEvaluate {
+      if (project.hasProperty("android")) {
+        project.android {
+          sourceSets {
+            main {
+              java {
+                exclude '**/next/**'
+              }
+            }
+          }
+        }
+      }
+      project.tasks.matching { it.name.contains("Kotlin") }.configureEach {
+        exclude '**/next/**'
+      }
+      project.dependencies {
+        compileOnly "androidx.room:room-runtime:2.6.1"
+        compileOnly "androidx.room:room-ktx:2.6.1"
+      }
+    }
+  }
+}
+
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
