@@ -18,6 +18,35 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     include: ['tests/**/*.{test,spec}.js'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'json-summary', 'lcov'],
+      reportsDirectory: './coverage',
+      thresholds: {
+        lines: 75,
+        functions: 75,
+        branches: 65,
+        statements: 75
+      },
+      include: [
+        'shared/domain/**/*.js',
+        'server/proxy.js',
+        'src/db/**/*.js',
+        'src/utils/**/*.js',
+        'mobile/src/config/api.js',
+        'mobile/src/hooks/useFirestoreData.js'
+      ],
+      exclude: [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/coverage/**',
+        '**/*.config.*',
+        'tests/**',
+        'docs/**',
+        'server/db.js',
+        'server/index.js'
+      ]
+    }
   },
 });
 

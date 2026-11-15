@@ -233,7 +233,7 @@ dist/assets/index-B3yBpjw1.js             523.41 kB │ gzip: 149.33 kB
 | Priority | Dimension | Finding | Current State | Target Remediation |
 | :--- | :--- | :--- | :--- | :--- |
 | **P1 — High** | Security | `/api/ocr` unauthenticated | **RESOLVED & VERIFIED** | Cryptographic token verification, user quota, IP rate limiting, and mobile token attachment enforced (`tests/ocrAuth.test.js`). |
-| **P2 — Medium** | DevOps / QA | Missing coverage tooling | Open | Add `@vitest/coverage-v8` to `devDependencies` and configure Vitest coverage thresholds in CI. |
+| **P2 — Medium** | DevOps / QA | Missing coverage tooling | **RESOLVED & VERIFIED** | `@vitest/coverage-v8` integrated, CI automated coverage reporting with realistic thresholds (80.4% lines, 78.5% statements, 84.1% funcs, 70.2% branches), and critical test gap closure (`docs/CODE_COVERAGE_REPORT.md`). |
 | **P3 — Medium** | Release Eng | Native mobile builds | Open | Configure GitHub Actions or EAS Build pipeline to automate APK/AAB builds with Android SDK. |
 | **P4 — Low** | Intelligence | Heuristic confidence | Open | Calculate confidence dynamically using sample size and standard deviation. |
 

@@ -29,8 +29,16 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Run Vitest Unit & Integration Tests
-        run: npm test
+      - name: Run Vitest Unit & Integration Tests with Coverage Enforcement
+        run: npm run test:coverage
+
+      - name: Upload Coverage Reports Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
 
       - name: Production Web Build
         run: npm run build
