@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { initializeAuth, getReactNativePersistence, getAuth } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore } from 'firebase/firestore';
+import { initializeAuth, getReactNativePersistence, getAuth, connectAuthEmulator } from 'firebase/auth';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // NOTE: Firebase config values (apiKey, etc.) are safe to expose for client-side Firebase SDKs
@@ -37,6 +37,19 @@ try {
   });
 } catch (e) {
   db = getFirestore(app);
+}
+
+// Optional Firebase Emulator integration for offline development and CI testing
+if (process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
+  const host = process.env.EXPO_PUBLIC_EMULATOR_HOST || '10.0.2.2';
+  try {
+    connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
+    connectFirestoreEmulator(db, host, 8080);
+    console.log(`[Firebase] Connected to local emulators at ${host}`);
+  } catch (err) {
+    // Prevent crash if emulators are already connected during hot reload
+    console.warn('[Firebase] Emulator connection skipped or already initialized:', err.message);
+  }
 }
 
 export { app, auth, db };

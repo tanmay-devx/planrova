@@ -234,7 +234,7 @@ dist/assets/index-B3yBpjw1.js             523.41 kB │ gzip: 149.33 kB
 | :--- | :--- | :--- | :--- | :--- |
 | **P1 — High** | Security | `/api/ocr` unauthenticated | **RESOLVED & VERIFIED** | Cryptographic token verification, user quota, IP rate limiting, and mobile token attachment enforced (`tests/ocrAuth.test.js`). |
 | **P2 — Medium** | DevOps / QA | Missing coverage tooling | **RESOLVED & VERIFIED** | `@vitest/coverage-v8` integrated, CI automated coverage reporting with realistic thresholds (80.4% lines, 78.5% statements, 84.1% funcs, 70.2% branches), and critical test gap closure (`docs/CODE_COVERAGE_REPORT.md`). |
-| **P3 — Medium** | Release Eng | Native mobile builds | Open | Configure GitHub Actions or EAS Build pipeline to automate APK/AAB builds with Android SDK. |
+| **P3 — Medium** | Release Eng | Native mobile builds | **CONFIGURED & VERIFIED** (Blocked on EAS Token) | EAS build profiles configured (APK/AAB), Kotlin bridge verified, emulator hooks added, real-device test plan documented (`docs/ANDROID_RELEASE_READINESS.md`). Requires `EXPO_TOKEN` secret to trigger cloud builder. |
 | **P4 — Low** | Intelligence | Heuristic confidence | Open | Calculate confidence dynamically using sample size and standard deviation. |
 
 ---
