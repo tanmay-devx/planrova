@@ -107,17 +107,17 @@ $ cd mobile && npx eas-cli build --platform android --profile preview --non-inte
 ✔ Using remote Android credentials (Expo server)
 ✔ Using Keystore from configuration: Build Credentials v-uy31pqKJ (default)
 ✔ Compressed project files 1s (56.2 MB)
-✔ Uploaded to EAS 7s
+✔ Uploaded to EAS 6s
 ✔ Computed project fingerprint
 
-See logs: https://expo.dev/accounts/tanmay041/projects/mobile/builds/951fbc86-59a4-4721-9897-82e0db913c29
+See logs: https://expo.dev/accounts/tanmay041/projects/mobile/builds/54b46217-7e84-462c-8987-7fcd2569ca46
 ```
 
 ### 4.3 Live Build Record
 
 | Attribute | Value |
 | :--- | :--- |
-| **Build ID** | `951fbc86-59a4-4721-9897-82e0db913c29` |
+| **Build ID** | `54b46217-7e84-462c-8987-7fcd2569ca46` |
 | **Account / Owner** | `tanmay041` (`tanmayagrawal001@gmail.com`) |
 | **Project** | `@tanmay041/mobile` |
 | **Platform** | Android |
@@ -125,10 +125,10 @@ See logs: https://expo.dev/accounts/tanmay041/projects/mobile/builds/951fbc86-59
 | **Target Artifact** | Signed `.apk` (Direct Device Sideloading) |
 | **SDK Version** | `58.0.0` |
 | **Runtime Version** | `1.0.0` |
-| **Git Commit** | `e4efeaf7276b2bddb80880d43d614bbf8d2a8c08` |
+| **Git Commit** | `c6740a3b98b15329e78bf4a7e71cabccb6fc3124` |
 | **Keystore** | Remote Keystore `Build Credentials v-uy31pqKJ (default)` |
-| **Status** | **In Progress / Queued on EAS Build Cloud Workers** |
-| **Live Build Logs** | [https://expo.dev/accounts/tanmay041/projects/mobile/builds/951fbc86-59a4-4721-9897-82e0db913c29](https://expo.dev/accounts/tanmay041/projects/mobile/builds/951fbc86-59a4-4721-9897-82e0db913c29) |
+| **Status** | **In Progress (Gradle 9.4.1 compilation on EAS Cloud Worker)** |
+| **Live Build Logs** | [https://expo.dev/accounts/tanmay041/projects/mobile/builds/54b46217-7e84-462c-8987-7fcd2569ca46](https://expo.dev/accounts/tanmay041/projects/mobile/builds/54b46217-7e84-462c-8987-7fcd2569ca46) |
 
 ---
 
