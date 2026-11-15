@@ -8,15 +8,28 @@ vi.mock('react', () => ({
   useCallback: vi.fn((fn) => fn)
 }));
 
-// In-memory mock for AsyncStorage
-const mockStorage = new Map();
+const { mockStorage, mockAsyncStorage } = vi.hoisted(() => {
+  const map = new Map();
+  const storage = {
+    getItem: vi.fn(async (key) => map.has(key) ? map.get(key) : null),
+    setItem: vi.fn(async (key, value) => { map.set(key, String(value)); }),
+    removeItem: vi.fn(async (key) => { map.delete(key); }),
+    clear: vi.fn(async () => { map.clear(); })
+  };
+  return { mockStorage: map, mockAsyncStorage: storage };
+});
+
 vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: {
-    getItem: vi.fn(async (key) => mockStorage.has(key) ? mockStorage.get(key) : null),
-    setItem: vi.fn(async (key, value) => { mockStorage.set(key, String(value)); }),
-    removeItem: vi.fn(async (key) => { mockStorage.delete(key); }),
-    clear: vi.fn(async () => { mockStorage.clear(); })
-  }
+  default: mockAsyncStorage,
+  ...mockAsyncStorage
+}));
+vi.mock('../mobile/node_modules/@react-native-async-storage/async-storage/lib/commonjs/AsyncStorage.js', () => ({
+  default: mockAsyncStorage,
+  ...mockAsyncStorage
+}));
+vi.mock('../mobile/node_modules/@react-native-async-storage/async-storage/lib/commonjs/index.js', () => ({
+  default: mockAsyncStorage,
+  ...mockAsyncStorage
 }));
 
 // Mock Firebase Auth and DB
@@ -26,19 +39,28 @@ vi.mock('../mobile/src/firebase.js', () => ({
 }));
 
 // Mock Firebase Firestore methods
-let mockSetDocFailOnCount = -1;
-let currentSetDocCalls = 0;
-vi.mock('firebase/firestore', () => ({
-  doc: vi.fn((db, ...parts) => ({ path: parts.join('/') })),
-  onSnapshot: vi.fn(),
-  setDoc: vi.fn(async (docRef, data) => {
-    currentSetDocCalls++;
-    if (mockSetDocFailOnCount > 0 && currentSetDocCalls >= mockSetDocFailOnCount) {
-      throw new Error('Simulated network offline failure');
+const { mockFirestore } = vi.hoisted(() => {
+  let mockSetDocFailOnCount = -1;
+  let currentSetDocCalls = 0;
+  return {
+    mockFirestore: {
+      doc: vi.fn((db, ...parts) => ({ path: parts.join('/') })),
+      onSnapshot: vi.fn(),
+      setDoc: vi.fn(async (docRef, data) => {
+        currentSetDocCalls++;
+        if (mockSetDocFailOnCount > 0 && currentSetDocCalls >= mockSetDocFailOnCount) {
+          throw new Error('Simulated network offline failure');
+        }
+        return true;
+      }),
+      setFailOnCount: (count) => { mockSetDocFailOnCount = count; },
+      resetCalls: () => { currentSetDocCalls = 0; mockSetDocFailOnCount = -1; }
     }
-    return true;
-  })
-}));
+  };
+});
+
+vi.mock('firebase/firestore', () => mockFirestore);
+vi.mock('../mobile/node_modules/firebase/firestore', () => mockFirestore);
 
 import {
   getLocalCacheKey,
@@ -49,8 +71,7 @@ import {
 describe('Stage 1.3 — Mobile Offline Data Durability & Storage Isolation', () => {
   beforeEach(() => {
     mockStorage.clear();
-    mockSetDocFailOnCount = -1;
-    currentSetDocCalls = 0;
+    mockFirestore.resetCalls();
     vi.clearAllMocks();
   });
 
@@ -76,10 +97,10 @@ describe('Stage 1.3 — Mobile Offline Data Durability & Storage Isolation', () 
 
   describe('2. Offline Pending Sync Queue Lifecycle', () => {
     it('returns 0 if queue is empty or userId is missing', async () => {
-      const resultNoUser = await flushPendingSyncQueue(null);
+      const resultNoUser = await flushPendingSyncQueue(null, {}, mockAsyncStorage, mockFirestore);
       expect(resultNoUser).toBe(0);
 
-      const resultEmpty = await flushPendingSyncQueue('user_1');
+      const resultEmpty = await flushPendingSyncQueue('user_1', {}, mockAsyncStorage, mockFirestore);
       expect(resultEmpty).toBe(0);
     });
 
@@ -93,7 +114,7 @@ describe('Stage 1.3 — Mobile Offline Data Durability & Storage Isolation', () 
       ];
       mockStorage.set(queueKey, JSON.stringify(queuedItems));
 
-      const flushed = await flushPendingSyncQueue(userId, {});
+      const flushed = await flushPendingSyncQueue(userId, {}, mockAsyncStorage, mockFirestore);
       expect(flushed).toBe(2);
       expect(mockStorage.has(queueKey)).toBe(false);
     });
@@ -109,9 +130,9 @@ describe('Stage 1.3 — Mobile Offline Data Durability & Storage Isolation', () 
       mockStorage.set(queueKey, JSON.stringify(queuedItems));
 
       // Fail on the 2nd write call
-      mockSetDocFailOnCount = 2;
+      mockFirestore.setFailOnCount(2);
 
-      const flushed = await flushPendingSyncQueue(userId, {});
+      const flushed = await flushPendingSyncQueue(userId, {}, mockAsyncStorage, mockFirestore);
       expect(flushed).toBe(1);
 
       // Remaining item must be preserved in storage

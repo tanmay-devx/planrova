@@ -11,6 +11,7 @@ import { useFonts, PlusJakartaSans_400Regular, PlusJakartaSans_500Medium, PlusJa
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 
 import { auth, db } from './src/firebase';
@@ -74,8 +75,21 @@ export default function App() {
             setOnboardingRequired(true);
           }
         } catch (e) {
-          console.warn('Profile check fallback:', e);
-          setOnboardingRequired(false);
+          // If Firestore remote query is blocked (e.g. unpublished cloud rules or offline), fall back to local cache
+          try {
+            const cachedProfile = await AsyncStorage.getItem(`planrova_${currentUser.uid}_user_profile`);
+            if (cachedProfile) {
+              const parsed = JSON.parse(cachedProfile);
+              setOnboardingRequired(!parsed || !parsed.onboarded);
+            } else {
+              setOnboardingRequired(false);
+            }
+          } catch {
+            setOnboardingRequired(false);
+          }
+          if (e?.code !== 'permission-denied') {
+            console.warn('Profile check fallback:', e);
+          }
         } finally {
           setOnboardingLoading(false);
         }

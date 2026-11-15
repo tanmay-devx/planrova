@@ -14,13 +14,15 @@ export const getPendingSyncKey = (userId) => `planrova_pending_sync_${userId}`;
  * Flushes pending mutations queued while offline for a given user.
  * @param {string} userId
  * @param {object} firestoreDb
+ * @param {object} storage
+ * @param {object} firestoreFns
  * @returns {Promise<number>} Number of flushed mutations
  */
-export async function flushPendingSyncQueue(userId, firestoreDb = db) {
+export async function flushPendingSyncQueue(userId, firestoreDb = db, storage = AsyncStorage, firestoreFns = { doc, setDoc }) {
   if (!userId) return 0;
   const queueKey = getPendingSyncKey(userId);
   try {
-    const rawQueue = await AsyncStorage.getItem(queueKey);
+    const rawQueue = await storage.getItem(queueKey);
     if (!rawQueue) return 0;
     const queue = JSON.parse(rawQueue);
     if (!Array.isArray(queue) || queue.length === 0) return 0;
@@ -30,8 +32,8 @@ export async function flushPendingSyncQueue(userId, firestoreDb = db) {
 
     for (const item of queue) {
       try {
-        const docRef = doc(firestoreDb, 'users', userId, 'appData', item.storageKey);
-        await setDoc(docRef, {
+        const docRef = firestoreFns.doc(firestoreDb, 'users', userId, 'appData', item.storageKey);
+        await firestoreFns.setDoc(docRef, {
           id: item.storageKey,
           value: typeof item.value === 'string' ? item.value : JSON.stringify(item.value),
           updated_at: item.timestamp || Date.now(),
@@ -45,9 +47,9 @@ export async function flushPendingSyncQueue(userId, firestoreDb = db) {
     }
 
     if (remainingQueue.length > 0) {
-      await AsyncStorage.setItem(queueKey, JSON.stringify(remainingQueue));
+      await storage.setItem(queueKey, JSON.stringify(remainingQueue));
     } else {
-      await AsyncStorage.removeItem(queueKey);
+      await storage.removeItem(queueKey);
     }
 
     return flushedCount;
@@ -154,7 +156,11 @@ export function useFirestoreData(storageKey, defaultValue = []) {
         setLoading(false);
         setSyncStatus('synced');
       }, (err) => {
-        console.error(`[Sync] Snapshot error for ${storageKey}:`, err);
+        if (err?.code === 'permission-denied') {
+          console.warn(`[Sync] Firestore permissions unavailable for '${storageKey}'. Operating in local cache mode.`);
+        } else {
+          console.error(`[Sync] Snapshot error for ${storageKey}:`, err);
+        }
         if (isMountedRef.current) {
           setLoading(false);
           setSyncStatus('offline');
@@ -201,7 +207,11 @@ export function useFirestoreData(storageKey, defaultValue = []) {
         setSyncStatus('synced');
       }
     } catch (firestoreErr) {
-      console.warn(`[Sync] Remote write failed for ${storageKey}, queuing for offline sync:`, firestoreErr.message);
+      if (firestoreErr?.code === 'permission-denied') {
+        console.warn(`[Sync] Remote write rejected (permission-denied) for ${storageKey}, queuing for offline sync.`);
+      } else {
+        console.warn(`[Sync] Remote write failed for ${storageKey}, queuing for offline sync:`, firestoreErr.message);
+      }
 
       // Queue write to pending sync list in AsyncStorage
       try {

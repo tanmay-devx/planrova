@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { initializeAuth, getReactNativePersistence, getAuth, connectAuthEmulator } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // NOTE: Firebase config values (apiKey, etc.) are safe to expose for client-side Firebase SDKs
@@ -28,15 +28,13 @@ try {
   auth = getAuth(app);
 }
 
-// Initialize Firestore with persistent local cache for full offline support.
-// Users can open the app with no internet and still see their data.
+// Initialize Firestore. React Native uses AsyncStorage for account-isolated offline storage
+// (see hooks/useFirestoreData.js) rather than browser-only IndexedDB caches.
 let db;
 try {
-  db = initializeFirestore(app, {
-    localCache: persistentLocalCache()
-  });
-} catch (e) {
   db = getFirestore(app);
+} catch (e) {
+  db = initializeFirestore(app, {});
 }
 
 // Optional Firebase Emulator integration for offline development and CI testing

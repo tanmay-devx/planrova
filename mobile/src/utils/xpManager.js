@@ -1,4 +1,5 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../firebase';
 import { calculateXPProgress } from './gamification';
 import * as Haptics from 'expo-haptics';
@@ -63,7 +64,19 @@ export const awardXP = async (userId, currentGamification, amount, reason) => {
     }, { merge: true });
 
   } catch (err) {
-    console.error('[XP Manager] Error awarding XP:', err);
+    if (err?.code === 'permission-denied') {
+      console.warn('[XP Manager] Firestore write permission denied; XP held in local state.');
+    } else {
+      console.error('[XP Manager] Error awarding XP:', err);
+    }
+  }
+
+  // Always persist gamification state to local AsyncStorage for offline and permission safety
+  try {
+    const localGamificationKey = `planrova_${userId}_gamification`;
+    await AsyncStorage.setItem(localGamificationKey, JSON.stringify({ level: progress.level, xp: progress.xp }));
+  } catch {
+    // Non-fatal local storage error
   }
 
   return progress;

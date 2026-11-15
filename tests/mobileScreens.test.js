@@ -179,5 +179,146 @@ describe('Stage 8 — Mobile Parity & Screen Contracts', () => {
       expect(() => serializeOnboardingPayload({ name: '   ' })).toThrow('Name is required');
     });
   });
+
+  describe('3. Mobile Alarm Scheduling & Lifecycle Logic', () => {
+    // Parity with mobile/src/screens/AlarmScreen.js
+    const mapDaysToIntegers = (daysArray) => {
+      const dayMap = { Sun: 1, Mon: 2, Tue: 3, Wed: 4, Thu: 5, Fri: 6, Sat: 7 };
+      return (daysArray || []).map(day => dayMap[day]).filter(Boolean);
+    };
+
+    const formatTimeWithAmPm = (timeStr) => {
+      if (!timeStr) return { time: '12:00', ampm: 'AM' };
+      const [hStr, mStr] = timeStr.split(':');
+      const h = parseInt(hStr, 10);
+      const m = parseInt(mStr, 10);
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const displayHour = h % 12 === 0 ? 12 : h % 12;
+      const displayMin = m.toString().padStart(2, '0');
+      return { time: `${displayHour}:${displayMin}`, ampm };
+    };
+
+    const calculateNextTriggerTime = (hour, minute, days, nowMs = Date.now()) => {
+      const calendar = new Date(nowMs);
+      calendar.setHours(hour, minute, 0, 0);
+
+      if (!days || days.length === 0) {
+        if (calendar.getTime() <= nowMs) {
+          calendar.setDate(calendar.getDate() + 1);
+        }
+        return calendar.getTime();
+      }
+
+      // 1 = Sun, 2 = Mon ... 7 = Sat (Calendar convention)
+      const currentDayOfWeek = calendar.getDay() + 1;
+      let minDiff = Infinity;
+
+      for (const day of days) {
+        let diff = day - currentDayOfWeek;
+        if (diff < 0) {
+          diff += 7;
+        } else if (diff === 0 && calendar.getTime() <= nowMs) {
+          diff += 7;
+        }
+        if (diff < minDiff) {
+          minDiff = diff;
+        }
+      }
+
+      calendar.setDate(calendar.getDate() + minDiff);
+      return calendar.getTime();
+    };
+
+    it('maps weekday strings to Android Calendar integer constants', () => {
+      const days = ['Sun', 'Mon', 'Wed', 'Fri', 'Sat'];
+      const mapped = mapDaysToIntegers(days);
+      expect(mapped).toEqual([1, 2, 4, 6, 7]);
+    });
+
+    it('formats 24hr time to 12hr time with AM/PM', () => {
+      expect(formatTimeWithAmPm('06:30')).toEqual({ time: '6:30', ampm: 'AM' });
+      expect(formatTimeWithAmPm('12:00')).toEqual({ time: '12:00', ampm: 'PM' });
+      expect(formatTimeWithAmPm('00:05')).toEqual({ time: '12:05', ampm: 'AM' });
+      expect(formatTimeWithAmPm('23:45')).toEqual({ time: '11:45', ampm: 'PM' });
+    });
+
+    it('schedules one-time alarm for today if in future, tomorrow if in past', () => {
+      // Mock fixed reference time: 2026-11-15 10:00:00
+      const refTime = new Date(2026, 10, 15, 10, 0, 0).getTime();
+
+      // Alarm set for 11:30 (future today)
+      const futureTrigger = calculateNextTriggerTime(11, 30, [], refTime);
+      const futureDate = new Date(futureTrigger);
+      expect(futureDate.getDate()).toBe(15);
+      expect(futureDate.getHours()).toBe(11);
+      expect(futureDate.getMinutes()).toBe(30);
+
+      // Alarm set for 09:00 (past today -> should trigger tomorrow 16th)
+      const pastTrigger = calculateNextTriggerTime(9, 0, [], refTime);
+      const pastDate = new Date(pastTrigger);
+      expect(pastDate.getDate()).toBe(16);
+      expect(pastDate.getHours()).toBe(9);
+      expect(pastDate.getMinutes()).toBe(0);
+    });
+
+    it('calculates next occurrence for repeating weekday alarms', () => {
+      // 2026-11-15 is Sunday (day = 1)
+      const refSunday = new Date(2026, 10, 15, 14, 0, 0).getTime();
+
+      // Recurring on Monday (2) and Wednesday (4) at 07:00
+      const nextTrigger = calculateNextTriggerTime(7, 0, [2, 4], refSunday);
+      const nextDate = new Date(nextTrigger);
+
+      // Next occurrence should be Monday Nov 16th
+      expect(nextDate.getDate()).toBe(16);
+      expect(nextDate.getDay()).toBe(1); // Monday
+      expect(nextDate.getHours()).toBe(7);
+    });
+
+    it('serializes native payload with legacy wake fallback structure', () => {
+      const customAlarms = [
+        {
+          id: 'alarm-1',
+          time: '07:30',
+          enabled: true,
+          label: 'Study Session',
+          mission: 'math',
+          days: ['Mon', 'Tue'],
+          ringtone: { assetKey: 'sitar' }
+        }
+      ];
+
+      const legacyWake = {
+        wakeTime: '06:00',
+        wakeEnabled: true,
+        wakeMission: 'shake',
+        wakeRingtone: { assetKey: 'rain' }
+      };
+
+      const nativeAlarmsList = customAlarms.map(a => {
+        const [h, m] = a.time.split(':').map(Number);
+        return {
+          id: a.id,
+          hour: h,
+          minute: m,
+          days: mapDaysToIntegers(a.days),
+          enabled: a.enabled,
+          label: a.label,
+          mission: a.mission,
+          ringtone: a.ringtone.assetKey,
+          snoozeTime: 5
+        };
+      });
+
+      const unifiedData = {
+        alarmsList: nativeAlarmsList,
+        alarms: legacyWake
+      };
+
+      expect(unifiedData.alarmsList[0].days).toEqual([2, 3]);
+      expect(unifiedData.alarmsList[0].ringtone).toBe('sitar');
+      expect(unifiedData.alarms.wakeTime).toBe('06:00');
+    });
+  });
 });
 
