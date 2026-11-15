@@ -110,14 +110,14 @@ $ cd mobile && npx eas-cli build --platform android --profile preview --non-inte
 ✔ Uploaded to EAS 6s
 ✔ Computed project fingerprint
 
-See logs: https://expo.dev/accounts/tanmay041/projects/mobile/builds/7208a386-b72b-4bb9-9d26-6445fec514c6
+See logs: https://expo.dev/accounts/tanmay041/projects/mobile/builds/5ecb05a0-7397-41f2-879b-5f6ecc23ed69
 ```
 
 ### 4.3 Live Build Record
 
 | Attribute | Value |
 | :--- | :--- |
-| **Build ID** | `7208a386-b72b-4bb9-9d26-6445fec514c6` |
+| **Build ID** | `5ecb05a0-7397-41f2-879b-5f6ecc23ed69` |
 | **Account / Owner** | `tanmay041` (`tanmayagrawal001@gmail.com`) |
 | **Project** | `@tanmay041/mobile` |
 | **Platform** | Android |
@@ -125,10 +125,10 @@ See logs: https://expo.dev/accounts/tanmay041/projects/mobile/builds/7208a386-b7
 | **Target Artifact** | Signed `.apk` (Direct Device Sideloading) |
 | **SDK Version** | `58.0.0` |
 | **Runtime Version** | `1.0.0` |
-| **Git Commit** | `49431d0637cf215359a35e4e8486927da8e54728` |
+| **Git Commit** | `442d3c267252cae44c21e72e11893c5c9636fcb9` |
 | **Keystore** | Remote Keystore `Build Credentials v-uy31pqKJ (default)` |
-| **Status** | **In Progress (Compiling on EAS Cloud Worker with android.disallowKotlinSourceSets=false)** |
-| **Live Build Logs** | [https://expo.dev/accounts/tanmay041/projects/mobile/builds/7208a386-b72b-4bb9-9d26-6445fec514c6](https://expo.dev/accounts/tanmay041/projects/mobile/builds/7208a386-b72b-4bb9-9d26-6445fec514c6) |
+| **Status** | **In Progress (Compiling on EAS Cloud Worker with async-storage Room Fix)** |
+| **Live Build Logs** | [https://expo.dev/accounts/tanmay041/projects/mobile/builds/5ecb05a0-7397-41f2-879b-5f6ecc23ed69](https://expo.dev/accounts/tanmay041/projects/mobile/builds/5ecb05a0-7397-41f2-879b-5f6ecc23ed69) |
 
 ---
 
